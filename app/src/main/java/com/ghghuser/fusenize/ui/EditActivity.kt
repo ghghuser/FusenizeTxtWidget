@@ -406,7 +406,7 @@ class EditActivity : ComponentActivity() {
         applyText(TextFieldValue(nt, TextRange((cur + delta).coerceIn(0, nt.length))))
     }
 
-    private fun setKeepOn(on: Boolean) {
+    private fun applyKeepOn(on: Boolean) {
         keepOn = on
         if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -486,7 +486,7 @@ class EditActivity : ComponentActivity() {
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleSmall,
                         )
-                        IconButton(onClick = { setKeepOn(!keepOn) }, modifier = Modifier.size(40.dp)) {
+                        IconButton(onClick = { applyKeepOn(!keepOn) }, modifier = Modifier.size(40.dp)) {
                             Text(
                                 if (keepOn) "☀" else "☾",
                                 color = if (keepOn) cs.primary else cs.onSurfaceVariant,
