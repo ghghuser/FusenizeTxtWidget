@@ -57,11 +57,12 @@ class FusenWidget : GlanceAppWidget() {
     private fun resolveText(context: Context, cfg: WidgetConfig): Pair<String, Boolean> {
         val u = cfg.fileUri ?: return "タップしてメモを選択" to true
         val uri = Uri.parse(u)
-        val read = MemoRepo.read(context, uri)
-        val text = read.getOrNull()
+        val read = MemoRepo.readText(context, uri)
+        val text = read.getOrNull()?.text
         return when {
             text != null -> if (text.isEmpty()) "（空のメモ）" to true else text.take(MAX_WIDGET_CHARS) to false
             !MemoRepo.exists(context, uri) -> "ファイルが見つかりません\nタップして再設定" to true
+            read.exceptionOrNull() is MemoRepo.EncodingException -> "文字コードの確認が必要です\nタップして開く" to true
             cfg.cachedText.isNotEmpty() -> cfg.cachedText.take(MAX_WIDGET_CHARS) to false
             else -> "読み込めません" to true
         }
@@ -101,7 +102,7 @@ private fun FusenContent(
     }
 
     val bg = Color(rgbToArgb(s.bgColor, s.bgAlpha))
-    var fg = Color(rgbToArgb(s.textColor))
+    var fg = Color(rgbToArgb(s.effectiveTextRgb()))
     if (placeholder) fg = fg.copy(alpha = 0.6f)
 
     Box(

@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// GitHub Actions の実行番号（run_number）を -PbuildNumber で受け取る
+val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
+
 android {
     namespace = "com.ghghuser.fusenize"
     // ランナーにSDK 35が無い場合は 34 に下げる（build.ymlで35を導入するので通常は不要）
@@ -11,10 +14,10 @@ android {
 
     defaultConfig {
         applicationId = "com.ghghuser.fusenize"
-        minSdk = 26
+        minSdk = 29 // 保存フォルダ未設定時に Documents/FusenizeWidget へ保存するため（MediaStore）
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = buildNumber
+        versionName = "0.2.$buildNumber"
     }
 
     buildTypes {

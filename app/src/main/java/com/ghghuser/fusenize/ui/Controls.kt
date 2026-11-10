@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -43,15 +46,17 @@ fun SliderRow(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> 
     }
 }
 
-/** プリセット + RGBスライダー（カスタム）による色選択 */
+/** プリセット + 自由入力（#RRGGBB / RGBスライダー）による色選択 */
 @Composable
 fun ColorPickerRow(label: String, rgb: Int, presets: List<Int>, onChange: (Int) -> Unit) {
     var custom by remember { mutableStateOf(false) }
+    var hex by remember(rgb) { mutableStateOf("%06X".format(rgb and 0xFFFFFF)) }
     Column(Modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.labelLarge)
         Row(
             Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             presets.forEach { p ->
                 val selected = (p and 0xFFFFFF) == (rgb and 0xFFFFFF)
@@ -66,9 +71,28 @@ fun ColorPickerRow(label: String, rgb: Int, presets: List<Int>, onChange: (Int) 
                         .clickable { onChange(p) }
                 )
             }
-            TextButton(onClick = { custom = !custom }) { Text("カスタム") }
+            TextButton(onClick = { custom = !custom }) { Text(if (custom) "閉じる" else "自由に選ぶ") }
         }
         if (custom) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape)
+                        .background(Color(rgbToArgb(rgb)))
+                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                )
+                OutlinedTextField(
+                    value = hex,
+                    onValueChange = { v ->
+                        val t = v.uppercase().filter { it in "0123456789ABCDEF" }.take(6)
+                        hex = t
+                        if (t.length == 6) onChange(t.toInt(16))
+                    },
+                    prefix = { Text("#") },
+                    label = { Text("RRGGBB") },
+                    singleLine = true,
+                    modifier = Modifier.width(150.dp),
+                )
+            }
             SliderRow("R", (rgb shr 16) and 0xFF, 0, 255) { onChange((rgb and 0x00FFFF) or (it shl 16)) }
             SliderRow("G", (rgb shr 8) and 0xFF, 0, 255) { onChange((rgb and 0xFF00FF) or (it shl 8)) }
             SliderRow("B", rgb and 0xFF, 0, 255) { onChange((rgb and 0xFFFF00) or it) }

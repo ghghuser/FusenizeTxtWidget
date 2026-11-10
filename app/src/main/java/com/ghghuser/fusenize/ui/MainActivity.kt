@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -30,6 +33,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -49,9 +53,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
+import com.ghghuser.fusenize.data.Importer
 import com.ghghuser.fusenize.data.MemoRepo
 import com.ghghuser.fusenize.data.Store
 import com.ghghuser.fusenize.data.rgbToArgb
@@ -73,6 +79,26 @@ private data class MemoRow(
 /** アプリアイコンから起動した時の一覧画面（開いたファイル / フォルダ内） */
 class MainActivity : ComponentActivity() {
     private val dateFmt = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
+    private val importer = ImportCoordinator()
+
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+
+    private fun versionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+    } catch (e: Exception) {
+        ""
+    }
+
+    private suspend fun doImport(uris: List<Uri>) {
+        val ctx = applicationContext
+        val items = withContext(Dispatchers.IO) { uris.mapNotNull { Importer.readItem(ctx, it) } }
+        if (items.isEmpty()) {
+            toast("取り込めるtxtがありませんでした")
+            return
+        }
+        val r = Importer.run(ctx, items, false) { n, rem -> importer.askConflict(n, rem) }
+        toast(r.describe("取り込み"))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,15 +137,28 @@ class MainActivity : ComponentActivity() {
         var showSettings by remember { mutableStateOf(false) }
         var listBg by remember { mutableStateOf(store.listBgColor) }
         var listAlpha by remember { mutableIntStateOf(store.listBgAlpha) }
-        var hasFolder by remember { mutableStateOf(MemoRepo.hasFolderPermission(this)) }
+        var storage by remember { mutableStateOf(MemoRepo.storageLabel(this)) }
 
-        val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val treePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
                 if (persistTreeUri(this, uri)) {
-                    hasFolder = true
-                    tick++
+                    storage = MemoRepo.storageLabel(this)
+                    lifecycleScope.launch {
+                        val r = Importer.migrateDefault(applicationContext) { n, rem -> importer.askConflict(n, rem) }
+                        if (r != null) toast(r.describe("移動"))
+                        tick++
+                    }
                 } else {
-                    Toast.makeText(this, "フォルダの権限を保持できませんでした", Toast.LENGTH_SHORT).show()
+                    toast("フォルダの権限を保持できませんでした")
+                }
+            }
+        }
+
+        val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (uris.isNotEmpty()) {
+                lifecycleScope.launch {
+                    doImport(uris)
+                    tick++
                 }
             }
         }
@@ -128,7 +167,7 @@ class MainActivity : ComponentActivity() {
         DisposableEffect(owner) {
             val obs = LifecycleEventObserver { _, e ->
                 if (e == Lifecycle.Event.ON_RESUME) {
-                    hasFolder = MemoRepo.hasFolderPermission(this@MainActivity)
+                    storage = MemoRepo.storageLabel(this@MainActivity)
                     tick++
                 }
             }
@@ -136,7 +175,7 @@ class MainActivity : ComponentActivity() {
             onDispose { owner.lifecycle.removeObserver(obs) }
         }
 
-        LaunchedEffect(tab, tick, hasFolder) {
+        LaunchedEffect(tab, tick, storage) {
             rows = withContext(Dispatchers.IO) { loadRows(store, tab) }
         }
 
@@ -157,21 +196,19 @@ class MainActivity : ComponentActivity() {
             containerColor = Color.Transparent,
             modifier = Modifier.fillMaxSize().background(bg),
             floatingActionButton = {
-                if (hasFolder) {
-                    FloatingActionButton(onClick = {
-                        lifecycleScope.launch {
-                            val s = withContext(Dispatchers.IO) { MemoRepo.createNew(this@MainActivity) }
-                            if (s != null) openEditor(s.uri)
-                            else Toast.makeText(this@MainActivity, "作成できませんでした", Toast.LENGTH_SHORT).show()
-                        }
-                    }) { Text("＋") }
-                }
+                FloatingActionButton(onClick = {
+                    lifecycleScope.launch {
+                        val s = withContext(Dispatchers.IO) { MemoRepo.createNew(this@MainActivity) }
+                        if (s != null) openEditor(s.uri)
+                        else toast("作成できませんでした")
+                    }
+                }) { Text("＋", fontSize = 24.sp) }
             },
         ) { pad ->
             Column(Modifier.padding(pad).fillMaxSize()) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Fusenize", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleLarge, color = onBg)
-                    IconButton(onClick = { showSettings = true }) { Text("⚙", color = onBg) }
+                    IconButton(onClick = { showSettings = true }, modifier = Modifier.size(52.dp)) { Text("⚙", fontSize = 28.sp, color = onBg) }
                 }
                 TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("開いたファイル") })
@@ -182,12 +219,15 @@ class MainActivity : ComponentActivity() {
                         FilterChip(selected = sort == m, onClick = { sort = m; store.sortMode = m }, label = { Text(l) })
                     }
                 }
-                if (tab == 1 && !hasFolder) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("保存フォルダが未設定です。", color = onBg)
-                        Button(onClick = { picker.launch(null) }) { Text("保存フォルダを選ぶ") }
-                    }
-                } else if (sorted.isEmpty()) {
+                if (tab == 1) {
+                    Text(
+                        "保存先: $storage",
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = onBg.copy(alpha = 0.6f),
+                    )
+                }
+                if (sorted.isEmpty()) {
                     Text(
                         if (tab == 0) "まだ開いたメモがありません。\n「フォルダ内」タブか＋から開けます。" else "txtがありません。＋で作成できます。",
                         modifier = Modifier.padding(16.dp), color = onBg,
@@ -226,26 +266,37 @@ class MainActivity : ComponentActivity() {
                 onDismissRequest = { showSettings = false },
                 title = { Text("一覧の設定") },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { picker.launch(null) }) { Text("保存フォルダを変更") }
+                    Column(
+                        Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("保存先: $storage", style = MaterialTheme.typography.bodySmall)
+                        Button(onClick = { treePicker.launch(null) }) { Text("保存フォルダを設定・変更") }
+                        OutlinedButton(onClick = {
+                            showSettings = false
+                            importPicker.launch(arrayOf("text/*"))
+                        }) { Text("txtファイルを取り込む") }
+                        HorizontalDivider()
                         ColorPickerRow("一覧の背景色", listBg ?: 0x000000, BG_PRESETS) {
                             listBg = it
                             store.listBgColor = it
                         }
-                        SliderRow("背景の透過度（255=不透明）", listAlpha, 0, 255) {
+                        SliderRow("背景の透過度（255=不透明、初期値200）", listAlpha, 0, 255) {
                             listAlpha = it
                             store.listBgAlpha = it
                         }
                         TextButton(onClick = {
                             listBg = null
-                            listAlpha = 255
+                            listAlpha = 200
                             store.listBgColor = null
-                            store.listBgAlpha = 255
+                            store.listBgAlpha = 200
                         }) { Text("テーマ既定に戻す") }
+                        Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 confirmButton = { TextButton(onClick = { showSettings = false }) { Text("閉じる") } },
             )
         }
+        ConflictDialog(importer)
     }
 }

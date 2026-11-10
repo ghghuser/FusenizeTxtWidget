@@ -8,6 +8,9 @@ import org.json.JSONObject
  * アプリ内部の設定保存（txtには書かない）。
  * ウィジェットID→設定、お気に入り、作成日時、最近開いたファイル、一覧の見た目。
  */
+/** ファイルごとの文字コード・改行コード（UTF-8/LF以外のときだけ保存） */
+data class FileMeta(val charset: String = "UTF-8", val crlf: Boolean = false)
+
 class Store(ctx: Context) {
     private val sp = ctx.applicationContext.getSharedPreferences("fusen", Context.MODE_PRIVATE)
 
@@ -88,6 +91,21 @@ class Store(ctx: Context) {
         JSONObject()
     }
 
+    // ---- 文字コード・改行コード ----
+    fun meta(uri: String): FileMeta = synchronized(lock) {
+        val o = readObj("meta").optJSONObject(uri) ?: return FileMeta()
+        FileMeta(o.optString("cs", "UTF-8").ifEmpty { "UTF-8" }, o.optBoolean("crlf", false))
+    }
+
+    fun setMeta(uri: String, m: FileMeta) {
+        synchronized(lock) {
+            val all = readObj("meta")
+            if (m == FileMeta()) all.remove(uri)
+            else all.put(uri, JSONObject().put("cs", m.charset).put("crlf", m.crlf))
+            sp.edit().putString("meta", all.toString()).apply()
+        }
+    }
+
     // ---- 最近開いたファイル ----
     fun recents(): List<String> = synchronized(lock) { readRecents() }
 
@@ -128,6 +146,13 @@ class Store(ctx: Context) {
                 created.put(new, t)
                 sp.edit().putString("created", created.toString()).apply()
             }
+            val metaAll = readObj("meta")
+            if (metaAll.has(old)) {
+                val m = metaAll.get(old)
+                metaAll.remove(old)
+                metaAll.put(new, m)
+                sp.edit().putString("meta", metaAll.toString()).apply()
+            }
             val r = readRecents().map { if (it == old) new else it }.distinct()
             sp.edit().putString("recents", JSONArray(r).toString()).apply()
         }
@@ -147,6 +172,9 @@ class Store(ctx: Context) {
             val created = readObj("created")
             created.remove(uri)
             sp.edit().putString("created", created.toString()).apply()
+            val metaAll = readObj("meta")
+            metaAll.remove(uri)
+            sp.edit().putString("meta", metaAll.toString()).apply()
             val r = readRecents().filter { it != uri }
             sp.edit().putString("recents", JSONArray(r).toString()).apply()
         }
@@ -167,7 +195,7 @@ class Store(ctx: Context) {
         }
 
     var listBgAlpha: Int
-        get() = sp.getInt("listBgA", 255)
+        get() = sp.getInt("listBgA", 200)
         set(v) {
             sp.edit().putInt("listBgA", v.coerceIn(0, 255)).apply()
         }

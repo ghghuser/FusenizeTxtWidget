@@ -24,9 +24,16 @@ fun StylePanel(style: WidgetStyle, onChange: (WidgetStyle) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         ColorPickerRow("背景色", style.bgColor, BG_PRESETS) { onChange(style.copy(bgColor = it)) }
-        SliderRow("背景の透過度（255=不透明）", style.bgAlpha, 0, 255) { onChange(style.copy(bgAlpha = it)) }
+        SliderRow("背景の透過度（255=不透明、初期値200）", style.bgAlpha, 0, 255) { onChange(style.copy(bgAlpha = it)) }
         HorizontalDivider()
-        ColorPickerRow("文字色", style.textColor, TEXT_PRESETS) { onChange(style.copy(textColor = it)) }
+        FilterChip(
+            selected = style.autoText,
+            onClick = { onChange(style.copy(autoText = !style.autoText)) },
+            label = { Text("文字色を背景に合わせて自動で決める") },
+        )
+        if (!style.autoText) {
+            ColorPickerRow("文字色", style.textColor, TEXT_PRESETS) { onChange(style.copy(textColor = it)) }
+        }
         SliderRow("文字サイズ (sp)", style.textSizeSp, 12, 32) { onChange(style.copy(textSizeSp = it)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = style.bold, onClick = { onChange(style.copy(bold = !style.bold)) }, label = { Text("太字") })

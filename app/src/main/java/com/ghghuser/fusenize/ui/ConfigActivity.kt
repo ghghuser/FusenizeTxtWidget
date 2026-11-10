@@ -11,11 +11,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
+import com.ghghuser.fusenize.data.Importer
 import com.ghghuser.fusenize.data.MemoRepo
 import com.ghghuser.fusenize.data.Store
 import com.ghghuser.fusenize.widget.FusenWidget
@@ -72,11 +74,12 @@ fun persistTreeUri(ctx: Context, uri: Uri): Boolean {
 
 /**
  * ウィジェット追加時（または未設定ウィジェットのタップ時）に開く設定画面。
- * 「新規メモを作成」か「フォルダ内の既存txtを選択」を選ぶ。
+ * 保存フォルダが未設定でも Documents/FusenizeWidget に自動作成して新規メモを作れる。
  */
 class ConfigActivity : ComponentActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var busy = false
+    private val importer = ImportCoordinator()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,9 +93,11 @@ class ConfigActivity : ComponentActivity() {
         setContent { FusenTheme { ConfigScreen() } }
     }
 
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+
     private fun finishWith(name: String?, uri: Uri?) {
         if (uri == null) {
-            Toast.makeText(this, "メモを用意できませんでした", Toast.LENGTH_SHORT).show()
+            toast("メモを用意できませんでした")
             busy = false
             return
         }
@@ -113,23 +118,49 @@ class ConfigActivity : ComponentActivity() {
     @Composable
     private fun ConfigScreen() {
         var tick by remember { mutableIntStateOf(0) }
-        var hasFolder by remember { mutableStateOf(MemoRepo.hasFolderPermission(this)) }
+        var storage by remember { mutableStateOf(MemoRepo.storageLabel(this)) }
         var files by remember { mutableStateOf<List<MemoRepo.Entry>?>(null) }
         var showFiles by remember { mutableStateOf(false) }
 
-        val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val treePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
                 if (persistTreeUri(this, uri)) {
-                    hasFolder = true
-                    tick++
+                    storage = MemoRepo.storageLabel(this)
+                    lifecycleScope.launch {
+                        val r = Importer.migrateDefault(applicationContext) { n, rem -> importer.askConflict(n, rem) }
+                        if (r != null) toast(r.describe("移動"))
+                        tick++
+                    }
                 } else {
-                    Toast.makeText(this, "フォルダの権限を保持できませんでした", Toast.LENGTH_SHORT).show()
+                    toast("フォルダの権限を保持できませんでした")
                 }
             }
         }
 
-        LaunchedEffect(hasFolder, showFiles, tick) {
-            if (hasFolder && showFiles) {
+        val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null && !busy) {
+                busy = true
+                lifecycleScope.launch {
+                    val ctx = applicationContext
+                    val item = withContext(Dispatchers.IO) { Importer.readItem(ctx, uri) }
+                    if (item == null) {
+                        toast("ファイルを読み込めませんでした")
+                        busy = false
+                        return@launch
+                    }
+                    val r = Importer.run(ctx, listOf(item), false) { n, rem -> importer.askConflict(n, rem) }
+                    val e = r.entries.firstOrNull()
+                    if (e != null) finishWith(e.name, e.uri)
+                    else {
+                        toast(if (r.cancelled) "取り込みを中止しました" else "取り込めませんでした")
+                        busy = false
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(showFiles, tick, storage) {
+            if (showFiles) {
                 files = withContext(Dispatchers.IO) {
                     MemoRepo.listTxt(this@ConfigActivity).sortedBy { it.name.lowercase() }
                 }
@@ -140,7 +171,7 @@ class ConfigActivity : ComponentActivity() {
 
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).systemBarsPadding()
-                .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { finish() },
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { finish() },
             contentAlignment = Alignment.Center,
         ) {
             Surface(
@@ -150,13 +181,8 @@ class ConfigActivity : ComponentActivity() {
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("付箋の設定", style = MaterialTheme.typography.titleLarge)
-                    if (!hasFolder) {
-                        Text("メモ（txt）を保存するフォルダを選んでください。最初の1回だけ許可が必要です。")
-                        Button(onClick = { picker.launch(null) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("保存フォルダを選ぶ")
-                        }
-                    } else if (!showFiles) {
-                        Text("保存先: ${MemoRepo.folderName(this@ConfigActivity) ?: "選択済み"}", style = MaterialTheme.typography.bodySmall)
+                    if (!showFiles) {
+                        Text("保存先: $storage", style = MaterialTheme.typography.bodySmall)
                         Button(
                             onClick = {
                                 if (busy) return@Button
@@ -169,16 +195,20 @@ class ConfigActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("新規メモを作成") }
                         OutlinedButton(onClick = { showFiles = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("フォルダ内の既存txtを選ぶ")
+                            Text("保存先の既存txtを選ぶ")
                         }
-                        TextButton(onClick = { picker.launch(null) }) { Text("保存フォルダを変更") }
+                        OutlinedButton(
+                            onClick = { filePicker.launch(arrayOf("text/*")) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("別の場所のtxtを取り込んで使う") }
+                        TextButton(onClick = { treePicker.launch(null) }) { Text("保存フォルダを設定・変更") }
                     } else {
                         Text("既存のtxtを選択", style = MaterialTheme.typography.titleMedium)
                         val list = files
                         if (list == null) {
                             Text("読み込み中…")
                         } else if (list.isEmpty()) {
-                            Text("このフォルダにtxtがありません")
+                            Text("保存先にtxtがありません")
                         } else {
                             LazyColumn(Modifier.fillMaxWidth().height(320.dp)) {
                                 items(list, key = { it.uri.toString() }) { e ->
@@ -201,5 +231,6 @@ class ConfigActivity : ComponentActivity() {
                 }
             }
         }
+        ConflictDialog(importer)
     }
 }

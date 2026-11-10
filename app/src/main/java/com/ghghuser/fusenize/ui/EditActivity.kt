@@ -71,6 +71,7 @@ import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
 import com.ghghuser.fusenize.FusenApp
 import com.ghghuser.fusenize.data.Drafts
+import com.ghghuser.fusenize.data.FileMeta
 import com.ghghuser.fusenize.data.MemoRepo
 import com.ghghuser.fusenize.data.Store
 import com.ghghuser.fusenize.data.WidgetStyle
@@ -154,6 +155,8 @@ class EditActivity : ComponentActivity() {
     private var style by mutableStateOf(WidgetStyle())
     private var fileName by mutableStateOf("")
     private var keepOn by mutableStateOf(false)
+    private var charsetName by mutableStateOf("UTF-8")
+    private var pendingEnc by mutableStateOf<ByteArray?>(null)
     private val undoMgr = UndoManager()
 
     private val screenOffReceiver = object : BroadcastReceiver() {
@@ -202,15 +205,22 @@ class EditActivity : ComponentActivity() {
         lifecycleScope.launch {
             val ctx = applicationContext
             val loadedData = withContext(Dispatchers.IO) {
-                val r = MemoRepo.read(ctx, u)
+                val r = MemoRepo.readText(ctx, u)
                 val name = MemoRepo.displayName(ctx, u) ?: ""
                 val mod = MemoRepo.lastModified(ctx, u)
                 val draft = Drafts.read(ctx, u)
                 Triple(r, name, Pair(mod, draft))
             }
             val (result, name, md) = loadedData
-            val content = result.getOrNull()
+            val content = result.getOrNull()?.text
             if (content == null) {
+                val ex = result.exceptionOrNull()
+                if (ex is MemoRepo.EncodingException) {
+                    // UTF-8以外: どう開くか尋ねる（確認が済むまで何も書き込まない）
+                    fileName = name
+                    pendingEnc = ex.bytes
+                    return@launch
+                }
                 val msg = result.exceptionOrNull()?.message ?: "開けませんでした"
                 Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
                 if (widgetMode && !MemoRepo.exists(ctx, u)) {
@@ -224,6 +234,13 @@ class EditActivity : ComponentActivity() {
             }
             fileName = name
             if (!widgetMode) manualName = !MemoRepo.hasNumberPrefix(name)
+            result.getOrNull()?.let { ft ->
+                withContext(Dispatchers.IO) {
+                    val m = store.meta(u.toString())
+                    if (m.crlf != ft.crlf) store.setMeta(u.toString(), m.copy(crlf = ft.crlf))
+                }
+            }
+            charsetName = store.meta(u.toString()).charset
             lastSaved = content
             val (mod, draft) = md
             var shown = content
@@ -272,13 +289,19 @@ class EditActivity : ComponentActivity() {
         FusenApp.scope.launch {
             FusenApp.saveMutex.withLock {
                 val u = uriRef.get() ?: return@withLock
-                val res = MemoRepo.save(ctx, u, t, man)
+                val outcome = MemoRepo.save(ctx, u, t, man)
+                val res = outcome.saved
                 if (res == null) {
                     // 失敗: 次回また保存を試みる。下書きは残す。
                     lastSaved = FORCE_RESAVE
                     Drafts.write(ctx, u, t)
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(ctx, "保存に失敗しました（内容は端末内に退避済み）", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            ctx,
+                            if (outcome.encodeError) "この文字コードで表せない文字があるため保存できません（メニューの「UTF-8に変換して保存」を使ってください。内容は端末内に退避済み）"
+                            else "保存に失敗しました（内容は端末内に退避済み）",
+                            Toast.LENGTH_LONG,
+                        ).show()
                     }
                 } else {
                     uriRef.set(res.uri)
@@ -412,6 +435,58 @@ class EditActivity : ComponentActivity() {
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+    // ---------- 文字コード ----------
+
+    /** 元の文字コードのまま開く（ファイルは変更しない。保存時も同じ文字コードで書く） */
+    private fun encOpenAs(cs: String) {
+        val b = pendingEnc ?: return
+        val u = uriRef.get() ?: return
+        store.setMeta(u.toString(), FileMeta(cs, MemoRepo.hasCrlf(b, cs)))
+        pendingEnc = null
+        loadContent()
+    }
+
+    /** 元のバイト列を端末内にバックアップしてから、UTF-8で書き直して開く */
+    private fun encConvert(cs: String) {
+        val b = pendingEnc ?: return
+        val u = uriRef.get() ?: return
+        val ctx = applicationContext
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                val t = MemoRepo.tryDecode(b, cs) ?: return@withContext false
+                FusenApp.saveMutex.withLock { MemoRepo.convertToUtf8(ctx, u, t, MemoRepo.hasCrlf(b, cs)) }
+            }
+            if (ok) {
+                pendingEnc = null
+                loadContent()
+            } else {
+                Toast.makeText(ctx, "UTF-8への変換に失敗しました", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** 開いている非UTF-8のメモを、現在の内容でUTF-8に変換して保存する */
+    private fun convertCurrent() {
+        val u = uriRef.get() ?: return
+        val t = text.text
+        val ctx = applicationContext
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                FusenApp.saveMutex.withLock {
+                    MemoRepo.convertToUtf8(ctx, u, t, store.meta(u.toString()).crlf)
+                }
+            }
+            if (ok) {
+                charsetName = "UTF-8"
+                lastSaved = t
+                Drafts.delete(ctx, u)
+                Toast.makeText(ctx, "UTF-8に変換しました（元のファイルは端末内にバックアップ済み）", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(ctx, "UTF-8への変換に失敗しました", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     // ---------- UI ----------
 
     @Composable
@@ -424,7 +499,7 @@ class EditActivity : ComponentActivity() {
         val cs = MaterialTheme.colorScheme
 
         val editorBg = if (widgetMode) Color(rgbToArgb(style.bgColor)) else cs.surfaceVariant
-        val editorFg = if (widgetMode) Color(rgbToArgb(style.textColor)) else cs.onSurfaceVariant
+        val editorFg = if (widgetMode) Color(rgbToArgb(style.effectiveTextRgb())) else cs.onSurfaceVariant
 
         LaunchedEffect(loaded) {
             if (loaded) {
@@ -477,7 +552,8 @@ class EditActivity : ComponentActivity() {
                     // 1段目: ファイル名 / 画面オン / メニュー / 閉じる
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            (if (manualName) "📌 " else "") + fileName.ifEmpty { "…" },
+                            (if (manualName) "📌 " else "") + fileName.ifEmpty { "…" } +
+                                (if (charsetName != "UTF-8") "  [" + (MemoRepo.ENCODINGS.firstOrNull { it.first == charsetName }?.second ?: charsetName) + "]" else ""),
                             modifier = Modifier.weight(1f).clickable {
                                 renameText = fileName.removeSuffix(".txt")
                                 dlg = Dlg.RENAME
@@ -506,6 +582,12 @@ class EditActivity : ComponentActivity() {
                                         backToAutoName()
                                     })
                                 }
+                                if (charsetName != "UTF-8") {
+                                    DropdownMenuItem(text = { Text("UTF-8に変換して保存") }, onClick = {
+                                        menuOpen = false
+                                        convertCurrent()
+                                    })
+                                }
                                 DropdownMenuItem(text = { Text("メモをクリア") }, onClick = {
                                     menuOpen = false
                                     dlg = Dlg.CLEAR
@@ -525,7 +607,8 @@ class EditActivity : ComponentActivity() {
                         TextButton(onClick = { toggleCheckbox() }) { Text("☑ チェック") }
                         if (widgetMode) {
                             TextButton(onClick = { showSettings = !showSettings }) {
-                                Text(if (showSettings) "⚙ 設定を閉じる" else "⚙ 設定")
+                                Text("⚙", fontSize = 24.sp)
+                                Text(if (showSettings) " 設定を閉じる" else " 設定")
                             }
                         }
                     }
@@ -570,6 +653,15 @@ class EditActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+
+        pendingEnc?.let { b ->
+            EncodingDialog(
+                bytes = b,
+                onOpenAs = { encOpenAs(it) },
+                onConvert = { encConvert(it) },
+                onCancel = { finish() },
+            )
         }
 
         when (dlg) {

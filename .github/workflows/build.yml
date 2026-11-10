@@ -30,10 +30,15 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace -PbuildNumber=${{ github.run_number }}
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/FusenizeWidget-${{ github.run_number }}-debug.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: FusenizeWidget-${{ github.run_number }}-debug
+          path: dist/FusenizeWidget-${{ github.run_number }}-debug.apk
           if-no-files-found: error
