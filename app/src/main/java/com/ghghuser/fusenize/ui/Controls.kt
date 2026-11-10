@@ -1,0 +1,80 @@
+package com.ghghuser.fusenize.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.ghghuser.fusenize.data.rgbToArgb
+import kotlin.math.roundToInt
+
+@Composable
+fun SliderRow(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            Text("$value", style = MaterialTheme.typography.labelMedium)
+        }
+        Slider(
+            value = value.toFloat().coerceIn(min.toFloat(), max.toFloat()),
+            onValueChange = { onChange(it.roundToInt()) },
+            valueRange = min.toFloat()..max.toFloat(),
+        )
+    }
+}
+
+/** プリセット + RGBスライダー（カスタム）による色選択 */
+@Composable
+fun ColorPickerRow(label: String, rgb: Int, presets: List<Int>, onChange: (Int) -> Unit) {
+    var custom by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            presets.forEach { p ->
+                val selected = (p and 0xFFFFFF) == (rgb and 0xFFFFFF)
+                Box(
+                    Modifier.size(32.dp).clip(CircleShape)
+                        .background(Color(rgbToArgb(p)))
+                        .border(
+                            if (selected) 3.dp else 1.dp,
+                            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            CircleShape,
+                        )
+                        .clickable { onChange(p) }
+                )
+            }
+            TextButton(onClick = { custom = !custom }) { Text("カスタム") }
+        }
+        if (custom) {
+            SliderRow("R", (rgb shr 16) and 0xFF, 0, 255) { onChange((rgb and 0x00FFFF) or (it shl 16)) }
+            SliderRow("G", (rgb shr 8) and 0xFF, 0, 255) { onChange((rgb and 0xFF00FF) or (it shl 8)) }
+            SliderRow("B", rgb and 0xFF, 0, 255) { onChange((rgb and 0xFFFF00) or it) }
+        }
+    }
+}
+
+val BG_PRESETS = listOf(0xFFF59D, 0xFFCCBC, 0xC8E6C9, 0xBBDEFB, 0xE1BEE7, 0xFFFFFF, 0x424242, 0x000000)
+val TEXT_PRESETS = listOf(0x212121, 0xFFFFFF, 0xB71C1C, 0x0D47A1, 0x1B5E20, 0x4E342E)

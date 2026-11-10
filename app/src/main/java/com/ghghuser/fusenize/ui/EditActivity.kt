@@ -1,0 +1,619 @@
+package com.ghghuser.fusenize.ui
+
+import android.appwidget.AppWidgetManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.Uri
+import android.os.Bundle
+import android.view.WindowManager
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.ghghuser.fusenize.FusenApp
+import com.ghghuser.fusenize.data.Drafts
+import com.ghghuser.fusenize.data.MemoRepo
+import com.ghghuser.fusenize.data.Store
+import com.ghghuser.fusenize.data.WidgetStyle
+import com.ghghuser.fusenize.data.rgbToArgb
+import com.ghghuser.fusenize.widget.FusenWidget
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlin.math.abs
+
+/** 元に戻す/やり直し。短時間の連続入力はひとまとめにする */
+class UndoManager {
+    private val undoStack = ArrayList<String>()
+    private val redoStack = ArrayList<String>()
+    private var lastTime = 0L
+    var canUndo by mutableStateOf(false)
+        private set
+    var canRedo by mutableStateOf(false)
+        private set
+
+    fun onChange(old: String, new: String) {
+        if (old == new) return
+        val now = System.currentTimeMillis()
+        if (undoStack.isEmpty() || now - lastTime > 800 || abs(new.length - old.length) > 20) {
+            undoStack.add(old)
+            if (undoStack.size > 300) undoStack.removeAt(0)
+        }
+        lastTime = now
+        redoStack.clear()
+        refresh()
+    }
+
+    fun undo(current: String): String? {
+        if (undoStack.isEmpty()) return null
+        redoStack.add(current)
+        val r = undoStack.removeAt(undoStack.size - 1)
+        lastTime = 0L
+        refresh()
+        return r
+    }
+
+    fun redo(current: String): String? {
+        if (redoStack.isEmpty()) return null
+        undoStack.add(current)
+        val r = redoStack.removeAt(redoStack.size - 1)
+        lastTime = 0L
+        refresh()
+        return r
+    }
+
+    private fun refresh() {
+        canUndo = undoStack.isNotEmpty()
+        canRedo = redoStack.isNotEmpty()
+    }
+}
+
+private enum class Dlg { NONE, DELETE, CLEAR, RENAME }
+
+/**
+ * 透明ダイアログ風の編集画面。
+ * ウィジェットから開いた場合は widgetId、アプリの一覧から開いた場合は EXTRA_URI を使う。
+ */
+class EditActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_URI = "fusen_uri"
+        private const val FORCE_RESAVE = "\u0000"
+    }
+
+    private lateinit var store: Store
+    private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+    private val uriRef = AtomicReference<Uri?>(null)
+
+    private var manualName by mutableStateOf(false)
+    private var loaded by mutableStateOf(false)
+    private var deleted = false
+    private var lastSaved = ""
+    private var text by mutableStateOf(TextFieldValue(""))
+    private var style by mutableStateOf(WidgetStyle())
+    private var fileName by mutableStateOf("")
+    private var keepOn by mutableStateOf(false)
+    private val undoMgr = UndoManager()
+
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            saveNow()
+        }
+    }
+    private var receiverRegistered = false
+
+    private val widgetMode get() = widgetId != AppWidgetManager.INVALID_APPWIDGET_ID
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        store = Store(this)
+        widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        val extraUri = intent.getStringExtra(EXTRA_URI)
+
+        if (widgetMode) {
+            val cfg = store.getConfig(widgetId)
+            style = cfg.style
+            manualName = cfg.manualName
+            val u = cfg.fileUri
+            if (u == null) {
+                startActivity(
+                    Intent(this, ConfigActivity::class.java)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                )
+                finish()
+                return
+            }
+            uriRef.set(Uri.parse(u))
+        } else if (extraUri != null) {
+            uriRef.set(Uri.parse(extraUri))
+        } else {
+            finish()
+            return
+        }
+
+        loadContent()
+        setContent { FusenTheme { EditScreen() } }
+    }
+
+    private fun loadContent() {
+        val u = uriRef.get() ?: return
+        lifecycleScope.launch {
+            val ctx = applicationContext
+            val loadedData = withContext(Dispatchers.IO) {
+                val r = MemoRepo.read(ctx, u)
+                val name = MemoRepo.displayName(ctx, u) ?: ""
+                val mod = MemoRepo.lastModified(ctx, u)
+                val draft = Drafts.read(ctx, u)
+                Triple(r, name, Pair(mod, draft))
+            }
+            val (result, name, md) = loadedData
+            val content = result.getOrNull()
+            if (content == null) {
+                val msg = result.exceptionOrNull()?.message ?: "開けませんでした"
+                Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                if (widgetMode && !MemoRepo.exists(ctx, u)) {
+                    startActivity(
+                        Intent(this@EditActivity, ConfigActivity::class.java)
+                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                    )
+                }
+                finish()
+                return@launch
+            }
+            fileName = name
+            if (!widgetMode) manualName = !MemoRepo.hasNumberPrefix(name)
+            lastSaved = content
+            val (mod, draft) = md
+            var shown = content
+            if (draft != null && draft.text != content && draft.time > mod) {
+                shown = draft.text
+                Toast.makeText(ctx, "保存されていなかった内容を復元しました", Toast.LENGTH_LONG).show()
+            }
+            text = TextFieldValue(shown, TextRange(shown.length))
+            store.addRecent(u.toString())
+            loaded = true
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!receiverRegistered) {
+            ContextCompat.registerReceiver(
+                this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            receiverRegistered = true
+        }
+    }
+
+    override fun onStop() {
+        saveNow()
+        if (receiverRegistered) {
+            try {
+                unregisterReceiver(screenOffReceiver)
+            } catch (e: Exception) {
+            }
+            receiverRegistered = false
+        }
+        super.onStop()
+    }
+
+    // ---------- 保存 ----------
+
+    private fun saveNow() {
+        if (!loaded || deleted) return
+        val t = text.text
+        if (t == lastSaved) return
+        lastSaved = t
+        val ctx = applicationContext
+        val wid = widgetId
+        val man = manualName
+        FusenApp.scope.launch {
+            FusenApp.saveMutex.withLock {
+                val u = uriRef.get() ?: return@withLock
+                val res = MemoRepo.save(ctx, u, t, man)
+                if (res == null) {
+                    // 失敗: 次回また保存を試みる。下書きは残す。
+                    lastSaved = FORCE_RESAVE
+                    Drafts.write(ctx, u, t)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(ctx, "保存に失敗しました（内容は端末内に退避済み）", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    uriRef.set(res.uri)
+                    Drafts.delete(ctx, u)
+                    Drafts.delete(ctx, res.uri)
+                    if (wid != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                        Store(ctx).updateConfig(wid) { it.copy(cachedText = t.take(4000)) }
+                    }
+                    withContext(Dispatchers.Main) { fileName = res.name }
+                    try {
+                        FusenWidget().updateAll(ctx)
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+        }
+    }
+
+    private fun closeAndSave() {
+        saveNow()
+        finish()
+    }
+
+    private fun renameManually(base: String) {
+        saveNow()
+        val ctx = applicationContext
+        val wid = widgetId
+        FusenApp.scope.launch {
+            FusenApp.saveMutex.withLock {
+                val u = uriRef.get() ?: return@withLock
+                val r = MemoRepo.renameTo(ctx, u, base)
+                if (r == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(ctx, "ファイル名を変更できませんでした", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Drafts.delete(ctx, u)
+                    uriRef.set(r.uri)
+                    if (wid != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                        Store(ctx).updateConfig(wid) { it.copy(manualName = true) }
+                    }
+                    withContext(Dispatchers.Main) {
+                        fileName = r.name
+                        manualName = true
+                    }
+                    try {
+                        FusenWidget().updateAll(ctx)
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+        }
+    }
+
+    private fun backToAutoName() {
+        manualName = false
+        if (widgetMode) store.updateConfig(widgetId) { it.copy(manualName = false) }
+        lastSaved = FORCE_RESAVE
+        saveNow()
+    }
+
+    private fun deleteMemo() {
+        if (deleted) return
+        deleted = true
+        val ctx = applicationContext
+        FusenApp.scope.launch {
+            FusenApp.saveMutex.withLock {
+                val u = uriRef.get()
+                if (u != null) {
+                    val ok = MemoRepo.delete(ctx, u)
+                    if (ok) {
+                        Drafts.delete(ctx, u)
+                        Store(ctx).removeUri(u.toString())
+                    } else {
+                        deleted = false
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(ctx, "削除できませんでした", Toast.LENGTH_SHORT).show()
+                        }
+                        return@withLock
+                    }
+                }
+                try {
+                    FusenWidget().updateAll(ctx)
+                } catch (e: Exception) {
+                }
+                withContext(Dispatchers.Main) { finish() }
+            }
+        }
+    }
+
+    // ---------- 編集操作 ----------
+
+    private fun applyText(nv: TextFieldValue) {
+        if (nv.text != text.text) undoMgr.onChange(text.text, nv.text)
+        text = nv
+    }
+
+    private fun doUndo() {
+        undoMgr.undo(text.text)?.let { text = TextFieldValue(it, TextRange(it.length)) }
+    }
+
+    private fun doRedo() {
+        undoMgr.redo(text.text)?.let { text = TextFieldValue(it, TextRange(it.length)) }
+    }
+
+    /** カーソル行の ☐/☑ を切り替える（なければ先頭に ☐ を付ける） */
+    private fun toggleCheckbox() {
+        val s = text.text
+        val cur = text.selection.min.coerceIn(0, s.length)
+        val ls = (if (cur == 0) -1 else s.lastIndexOf('\n', cur - 1)) + 1
+        val leRaw = s.indexOf('\n', ls)
+        val le = if (leRaw < 0) s.length else leRaw
+        val line = s.substring(ls, le)
+        val newLine: String
+        var delta = 0
+        when {
+            line.startsWith("☐") -> newLine = "☑" + line.drop(1)
+            line.startsWith("☑") -> newLine = "☐" + line.drop(1)
+            else -> {
+                newLine = "☐ $line"
+                delta = 2
+            }
+        }
+        val nt = s.substring(0, ls) + newLine + s.substring(le)
+        applyText(TextFieldValue(nt, TextRange((cur + delta).coerceIn(0, nt.length))))
+    }
+
+    private fun setKeepOn(on: Boolean) {
+        keepOn = on
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    // ---------- UI ----------
+
+    @Composable
+    private fun EditScreen() {
+        var showSettings by remember { mutableStateOf(false) }
+        var menuOpen by remember { mutableStateOf(false) }
+        var dlg by remember { mutableStateOf(Dlg.NONE) }
+        var renameText by remember { mutableStateOf("") }
+        val focus = remember { FocusRequester() }
+        val cs = MaterialTheme.colorScheme
+
+        val editorBg = if (widgetMode) Color(rgbToArgb(style.bgColor)) else cs.surfaceVariant
+        val editorFg = if (widgetMode) Color(rgbToArgb(style.textColor)) else cs.onSurfaceVariant
+
+        LaunchedEffect(loaded) {
+            if (loaded) {
+                delay(150)
+                try {
+                    focus.requestFocus()
+                } catch (e: Exception) {
+                }
+            }
+        }
+        // 下書きの自動退避（保存前にプロセスが落ちても復元できるように）
+        LaunchedEffect(text.text, loaded) {
+            if (loaded && text.text != lastSaved) {
+                delay(800)
+                val u = uriRef.get()
+                if (u != null && !deleted) {
+                    withContext(Dispatchers.IO) { Drafts.write(applicationContext, u, text.text) }
+                }
+            }
+        }
+        // 見た目設定は即ウィジェットへ反映
+        LaunchedEffect(style, loaded) {
+            if (loaded && widgetMode && !deleted) {
+                store.updateConfig(widgetId) { it.copy(style = style) }
+                delay(200)
+                try {
+                    FusenWidget().updateAll(applicationContext)
+                } catch (e: Exception) {
+                }
+            }
+        }
+
+        BackHandler { closeAndSave() }
+
+        Box(
+            Modifier.fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f))
+                .systemBarsPadding()
+                .imePadding()
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { closeAndSave() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = cs.surface,
+                modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.86f)
+                    .pointerInput(Unit) { detectTapGestures { } },
+            ) {
+                Column(Modifier.fillMaxSize().padding(8.dp)) {
+                    // 1段目: ファイル名 / 画面オン / メニュー / 閉じる
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            (if (manualName) "📌 " else "") + fileName.ifEmpty { "…" },
+                            modifier = Modifier.weight(1f).clickable {
+                                renameText = fileName.removeSuffix(".txt")
+                                dlg = Dlg.RENAME
+                            }.padding(horizontal = 8.dp, vertical = 6.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        IconButton(onClick = { setKeepOn(!keepOn) }, modifier = Modifier.size(40.dp)) {
+                            Text(
+                                if (keepOn) "☀" else "☾",
+                                color = if (keepOn) cs.primary else cs.onSurfaceVariant,
+                            )
+                        }
+                        Box {
+                            IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) { Text("⋮") }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(text = { Text("ファイル名を変更") }, onClick = {
+                                    menuOpen = false
+                                    renameText = fileName.removeSuffix(".txt")
+                                    dlg = Dlg.RENAME
+                                })
+                                if (manualName) {
+                                    DropdownMenuItem(text = { Text("ファイル名を自動に戻す") }, onClick = {
+                                        menuOpen = false
+                                        backToAutoName()
+                                    })
+                                }
+                                DropdownMenuItem(text = { Text("メモをクリア") }, onClick = {
+                                    menuOpen = false
+                                    dlg = Dlg.CLEAR
+                                })
+                                DropdownMenuItem(text = { Text("このメモを削除") }, onClick = {
+                                    menuOpen = false
+                                    dlg = Dlg.DELETE
+                                })
+                            }
+                        }
+                        IconButton(onClick = { closeAndSave() }, modifier = Modifier.size(40.dp)) { Text("✓") }
+                    }
+                    // 2段目: ツールバー
+                    Row(Modifier.horizontalScroll(rememberScrollState())) {
+                        TextButton(onClick = { doUndo() }, enabled = undoMgr.canUndo) { Text("↺ 戻す") }
+                        TextButton(onClick = { doRedo() }, enabled = undoMgr.canRedo) { Text("↻ やり直し") }
+                        TextButton(onClick = { toggleCheckbox() }) { Text("☑ チェック") }
+                        if (widgetMode) {
+                            TextButton(onClick = { showSettings = !showSettings }) {
+                                Text(if (showSettings) "⚙ 設定を閉じる" else "⚙ 設定")
+                            }
+                        }
+                    }
+                    HorizontalDivider()
+                    // 本文
+                    Box(
+                        Modifier.weight(1f).fillMaxWidth()
+                            .padding(top = 6.dp)
+                            .background(editorBg, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        if (loaded) {
+                            BasicTextField(
+                                value = text,
+                                onValueChange = { applyText(it) },
+                                textStyle = TextStyle(
+                                    color = editorFg,
+                                    fontSize = (if (widgetMode) style.textSizeSp else 16).sp,
+                                    fontWeight = if (widgetMode && style.bold) FontWeight.Bold else FontWeight.Normal,
+                                    fontStyle = if (widgetMode && style.italic) FontStyle.Italic else FontStyle.Normal,
+                                    textAlign = if (!widgetMode) TextAlign.Start else when (style.hAlign) {
+                                        1 -> TextAlign.Center
+                                        2 -> TextAlign.End
+                                        else -> TextAlign.Start
+                                    },
+                                ),
+                                cursorBrush = SolidColor(editorFg),
+                                modifier = Modifier.fillMaxSize().focusRequester(focus),
+                            )
+                        } else {
+                            Text("読み込み中…", color = editorFg)
+                        }
+                    }
+                    // 設定パネル
+                    if (showSettings && widgetMode) {
+                        Column(
+                            Modifier.fillMaxWidth().heightIn(max = 300.dp)
+                                .padding(top = 6.dp).verticalScroll(rememberScrollState())
+                        ) {
+                            StylePanel(style) { style = it }
+                        }
+                    }
+                }
+            }
+        }
+
+        when (dlg) {
+            Dlg.NONE -> {}
+            Dlg.DELETE -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("このメモを削除しますか？") },
+                text = { Text("txtファイルも削除されます。元に戻せません。") },
+                confirmButton = { TextButton(onClick = { dlg = Dlg.NONE; deleteMemo() }) { Text("削除") } },
+                dismissButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") } },
+            )
+            Dlg.CLEAR -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("メモの内容をすべて消しますか？") },
+                text = { Text("「↺ 戻す」で元に戻せます（画面を閉じるまで）。") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        dlg = Dlg.NONE
+                        applyText(TextFieldValue("", TextRange(0)))
+                    }) { Text("クリア") }
+                },
+                dismissButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") } },
+            )
+            Dlg.RENAME -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("ファイル名を決める") },
+                text = {
+                    Column {
+                        Text("手動で決めると、1行目を書き換えてもファイル名は変わりません。", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(
+                            value = renameText,
+                            onValueChange = { renameText = it },
+                            singleLine = true,
+                            label = { Text("ファイル名（.txtは自動）") },
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        dlg = Dlg.NONE
+                        if (renameText.isNotBlank()) renameManually(renameText)
+                    }) { Text("変更") }
+                },
+                dismissButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") } },
+            )
+        }
+    }
+}
