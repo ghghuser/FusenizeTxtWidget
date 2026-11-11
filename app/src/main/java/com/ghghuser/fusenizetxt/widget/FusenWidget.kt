@@ -22,7 +22,6 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.update
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
