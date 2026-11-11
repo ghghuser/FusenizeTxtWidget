@@ -4,24 +4,33 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.update
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.text.FontStyle
 import androidx.glance.text.FontWeight
@@ -39,14 +48,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val MAX_WIDGET_CHARS = 3000
+val PAGE_KEY = ActionParameters.Key<Int>("fusen_page")
 
 class FusenWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-        val store = Store(context)
-        val cfg = store.getConfig(appWidgetId)
+        val cfg = Store(context).getConfig(appWidgetId)
         val state = withContext(Dispatchers.IO) { resolveText(context, cfg) }
         provideContent {
             FusenContent(context, appWidgetId, cfg, state.first, state.second)
@@ -69,7 +78,7 @@ class FusenWidget : GlanceAppWidget() {
     }
 }
 
-@androidx.compose.runtime.Composable
+@Composable
 private fun FusenContent(
     context: Context,
     appWidgetId: Int,
@@ -77,11 +86,13 @@ private fun FusenContent(
     text: String,
     placeholder: Boolean,
 ) {
-    val s = cfg.style
+    val page = cfg.cur
+    val s = cfg.styleFor(page)
     val linked = cfg.fileUri != null
     val intent = Intent(context, if (linked) EditActivity::class.java else ConfigActivity::class.java).apply {
         putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-        data = Uri.parse("fusen://widget/$appWidgetId")
+        putExtra(EditActivity.EXTRA_PAGE, page)
+        data = Uri.parse("fusen://widget/$appWidgetId/$page")
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     }
 
@@ -102,33 +113,68 @@ private fun FusenContent(
     }
 
     val bg = Color(rgbToArgb(s.bgColor, s.bgAlpha))
-    var fg = Color(rgbToArgb(s.effectiveTextRgb()))
-    if (placeholder) fg = fg.copy(alpha = 0.6f)
+    val fgRgb = Color(rgbToArgb(s.effectiveTextRgb()))
+    val fg = if (placeholder) fgRgb.copy(alpha = 0.6f) else fgRgb
 
     Box(
         modifier = GlanceModifier.fillMaxSize()
             .padding(start = s.outer.l.dp, top = s.outer.t.dp, end = s.outer.r.dp, bottom = s.outer.b.dp)
     ) {
-        Box(
+        Column(
             modifier = GlanceModifier.fillMaxSize()
                 .background(ColorProvider(bg))
                 .cornerRadius(8.dp)
-                .padding(start = s.inner.l.dp, top = s.inner.t.dp, end = s.inner.r.dp, bottom = s.inner.b.dp)
-                .clickable(actionStartActivity(intent)),
-            contentAlignment = Alignment(horizontal, vertical),
+                .padding(start = s.inner.l.dp, top = s.inner.t.dp, end = s.inner.r.dp, bottom = s.inner.b.dp),
         ) {
-            Text(
-                text = text,
-                modifier = GlanceModifier.fillMaxWidth(),
-                style = TextStyle(
-                    color = ColorProvider(fg),
-                    fontSize = s.textSizeSp.sp,
-                    fontWeight = if (s.bold) FontWeight.Bold else FontWeight.Normal,
-                    fontStyle = if (s.italic) FontStyle.Italic else FontStyle.Normal,
-                    textAlign = textAlign,
-                ),
-            )
+            Box(
+                modifier = GlanceModifier.fillMaxWidth().defaultWeight().clickable(actionStartActivity(intent)),
+                contentAlignment = Alignment(horizontal, vertical),
+            ) {
+                Text(
+                    text = text,
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    style = TextStyle(
+                        color = ColorProvider(fg),
+                        fontSize = s.textSizeSp.sp,
+                        fontWeight = if (s.bold) FontWeight.Bold else FontWeight.Normal,
+                        fontStyle = if (s.italic) FontStyle.Italic else FontStyle.Normal,
+                        textAlign = textAlign,
+                    ),
+                )
+            }
+            if (cfg.pages.size > 1) {
+                // 最下段: ページ切り替え
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth().height(26.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    cfg.pages.indices.forEach { i ->
+                        val on = i == page
+                        Text(
+                            text = "${i + 1}",
+                            modifier = GlanceModifier
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                .clickable(actionRunCallback<SwitchPageAction>(actionParametersOf(PAGE_KEY to i))),
+                            style = TextStyle(
+                                color = ColorProvider(if (on) fgRgb else fgRgb.copy(alpha = 0.5f)),
+                                fontSize = 13.sp,
+                                fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            ),
+                        )
+                    }
+                }
+            }
         }
+    }
+}
+
+class SwitchPageAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val page = parameters[PAGE_KEY] ?: return
+        val id = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+        Store(context).updateConfig(id) { it.copy(current = page.coerceIn(0, it.pages.size - 1)) }
+        FusenWidget().update(context, glanceId)
     }
 }
 

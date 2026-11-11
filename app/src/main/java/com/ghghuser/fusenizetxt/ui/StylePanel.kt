@@ -14,16 +14,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ghghuser.fusenizetxt.data.Insets
+import com.ghghuser.fusenizetxt.data.MAX_PAGES
 import com.ghghuser.fusenizetxt.data.WidgetStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StylePanel(style: WidgetStyle, onChange: (WidgetStyle) -> Unit) {
+fun StylePanel(
+    style: WidgetStyle,
+    pageCount: Int,
+    pageNo: Int,
+    onPageCount: (Int) -> Unit,
+    onChange: (WidgetStyle) -> Unit,
+) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        ColorPickerRow("背景色", style.bgColor, BG_PRESETS) { onChange(style.copy(bgColor = it)) }
+        if (pageNo + 1 < MAX_PAGES) {
+            SliderRow("ページ数（2以上で最下段にページ切替）", pageCount, pageNo + 1, MAX_PAGES) { onPageCount(it) }
+        } else {
+            Text("ページ数: $MAX_PAGES", style = MaterialTheme.typography.labelMedium)
+        }
+        HorizontalDivider()
+        ColorPickerRow(
+            if (pageCount > 1) "背景色（このページ ${pageNo + 1}）" else "背景色",
+            style.bgColor, BG_PRESETS,
+        ) { onChange(style.copy(bgColor = it)) }
         SliderRow("背景の透過度（255=不透明、初期値200）", style.bgAlpha, 0, 255) { onChange(style.copy(bgAlpha = it)) }
         HorizontalDivider()
         FilterChip(

@@ -69,27 +69,86 @@ data class WidgetStyle(
     }
 }
 
-/** ウィジェット1つ分の設定（ウィジェットID単位） */
-data class WidgetConfig(
-    val widgetId: Int,
+const val MAX_PAGES = 5
+
+/** 追加したページの初期背景色（ページごとに色が違う） */
+val PAGE_COLORS = listOf(0xFFF59D, 0xC8E6C9, 0xBBDEFB, 0xFFCCBC, 0xE1BEE7)
+
+/** ウィジェットの1ページ分（1ページ = 1つのtxt） */
+data class PageCfg(
     val fileUri: String? = null,
     val manualName: Boolean = false,
-    val style: WidgetStyle = WidgetStyle(),
     val cachedText: String = "",
+    val bgColor: Int? = null, // ページ別の背景色（null = ウィジェット共通の色）
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("uri", fileUri ?: JSONObject.NULL)
         .put("manual", manualName)
-        .put("style", style.toJson())
         .put("cache", cachedText)
+        .put("bg", bgColor ?: JSONObject.NULL)
 
     companion object {
-        fun fromJson(id: Int, o: JSONObject): WidgetConfig = WidgetConfig(
-            widgetId = id,
+        fun fromJson(o: JSONObject): PageCfg = PageCfg(
             fileUri = if (o.isNull("uri")) null else o.optString("uri").ifEmpty { null },
             manualName = o.optBoolean("manual", false),
-            style = WidgetStyle.fromJson(o.optJSONObject("style")),
             cachedText = o.optString("cache", ""),
+            bgColor = if (o.isNull("bg") || !o.has("bg")) null else o.optInt("bg") and 0xFFFFFF,
         )
+    }
+}
+
+/** ウィジェット1つ分の設定（ウィジェットID単位）。最大5ページ。 */
+data class WidgetConfig(
+    val widgetId: Int,
+    val pages: List<PageCfg> = listOf(PageCfg()),
+    val current: Int = 0,
+    val style: WidgetStyle = WidgetStyle(),
+) {
+    /** 現在のページ番号（0始まり、範囲内に丸める） */
+    val cur: Int get() = current.coerceIn(0, pages.size - 1)
+    val page: PageCfg get() = pages[cur]
+    val fileUri: String? get() = page.fileUri
+    val manualName: Boolean get() = page.manualName
+    val cachedText: String get() = page.cachedText
+
+    fun updatePage(idx: Int = cur, f: (PageCfg) -> PageCfg): WidgetConfig {
+        if (idx !in pages.indices) return this
+        return copy(pages = pages.toMutableList().also { it[idx] = f(it[idx]) })
+    }
+
+    fun withPageCount(n: Int): WidgetConfig {
+        val c = n.coerceIn(1, MAX_PAGES)
+        val np = if (c <= pages.size) pages.take(c) else pages + List(c - pages.size) { i -> PageCfg(bgColor = PAGE_COLORS[(pages.size + i) % PAGE_COLORS.size]) }
+        return copy(pages = np, current = current.coerceIn(0, c - 1))
+    }
+
+    /** そのページで実際に使う見た目（ページ別の背景色があれば上書き） */
+    fun styleFor(idx: Int = cur): WidgetStyle {
+        val b = pages.getOrNull(idx)?.bgColor
+        return if (b != null) style.copy(bgColor = b) else style
+    }
+
+    fun toJson(): JSONObject = JSONObject()
+        .put("pages", org.json.JSONArray(pages.map { it.toJson() }))
+        .put("current", cur)
+        .put("style", style.toJson())
+
+    companion object {
+        fun fromJson(id: Int, o: JSONObject): WidgetConfig {
+            val arr = o.optJSONArray("pages")
+            val pages: List<PageCfg> = if (arr != null && arr.length() > 0) {
+                (0 until minOf(arr.length(), MAX_PAGES)).mapNotNull { arr.optJSONObject(it)?.let { j -> PageCfg.fromJson(j) } }
+                    .ifEmpty { listOf(PageCfg()) }
+            } else {
+                // 旧形式（1ページのみ）からの読み替え
+                listOf(PageCfg.fromJson(o))
+            }
+            return WidgetConfig(
+                widgetId = id,
+                pages = pages,
+                current = o.optInt("current", 0).coerceIn(0, pages.size - 1),
+                style = WidgetStyle.fromJson(o.optJSONObject("style")),
+            )
+        }
     }
 }

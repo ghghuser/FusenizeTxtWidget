@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -72,11 +74,15 @@ import androidx.lifecycle.lifecycleScope
 import com.ghghuser.fusenizetxt.FusenApp
 import com.ghghuser.fusenizetxt.data.Drafts
 import com.ghghuser.fusenizetxt.data.FileMeta
+import com.ghghuser.fusenizetxt.data.History
 import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
 import com.ghghuser.fusenizetxt.data.WidgetStyle
 import com.ghghuser.fusenizetxt.data.rgbToArgb
 import com.ghghuser.fusenizetxt.widget.FusenWidget
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -131,7 +137,9 @@ class UndoManager {
     }
 }
 
-private enum class Dlg { NONE, DELETE, CLEAR, RENAME }
+private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY }
+
+private data class HistItem(val v: History.Version, val preview: String)
 
 /**
  * 透明ダイアログ風の編集画面。
@@ -140,6 +148,7 @@ private enum class Dlg { NONE, DELETE, CLEAR, RENAME }
 class EditActivity : ComponentActivity() {
     companion object {
         const val EXTRA_URI = "fusen_uri"
+        const val EXTRA_PAGE = "fusen_page"
         private const val FORCE_RESAVE = "\u0000"
     }
 
@@ -157,6 +166,12 @@ class EditActivity : ComponentActivity() {
     private var keepOn by mutableStateOf(false)
     private var charsetName by mutableStateOf("UTF-8")
     private var pendingEnc by mutableStateOf<ByteArray?>(null)
+    private var page = 0
+    private var pageCount by mutableStateOf(1)
+    private var pageBg by mutableStateOf<Int?>(null)
+    private var histItems by mutableStateOf<List<HistItem>?>(null)
+    private var histPick by mutableStateOf<HistItem?>(null)
+    private val histFmt = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault())
     private val undoMgr = UndoManager()
 
     private val screenOffReceiver = object : BroadcastReceiver() {
@@ -177,13 +192,17 @@ class EditActivity : ComponentActivity() {
 
         if (widgetMode) {
             val cfg = store.getConfig(widgetId)
+            page = intent.getIntExtra(EXTRA_PAGE, cfg.cur).coerceIn(0, cfg.pages.size - 1)
             style = cfg.style
-            manualName = cfg.manualName
-            val u = cfg.fileUri
+            pageCount = cfg.pages.size
+            pageBg = cfg.pages[page].bgColor
+            manualName = cfg.pages[page].manualName
+            val u = cfg.pages[page].fileUri
             if (u == null) {
                 startActivity(
                     Intent(this, ConfigActivity::class.java)
                         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                        .putExtra(EXTRA_PAGE, page)
                 )
                 finish()
                 return
@@ -227,6 +246,7 @@ class EditActivity : ComponentActivity() {
                     startActivity(
                         Intent(this@EditActivity, ConfigActivity::class.java)
                             .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                            .putExtra(EXTRA_PAGE, page)
                     )
                 }
                 finish()
@@ -238,6 +258,7 @@ class EditActivity : ComponentActivity() {
                 withContext(Dispatchers.IO) {
                     val m = store.meta(u.toString())
                     if (m.crlf != ft.crlf) store.setMeta(u.toString(), m.copy(crlf = ft.crlf))
+                    History.add(applicationContext, u, ft.text) // 開いた時点の内容も履歴に残す
                 }
             }
             charsetName = store.meta(u.toString()).charset
@@ -285,6 +306,7 @@ class EditActivity : ComponentActivity() {
         lastSaved = t
         val ctx = applicationContext
         val wid = widgetId
+        val pg = page
         val man = manualName
         FusenApp.scope.launch {
             FusenApp.saveMutex.withLock {
@@ -307,8 +329,9 @@ class EditActivity : ComponentActivity() {
                     uriRef.set(res.uri)
                     Drafts.delete(ctx, u)
                     Drafts.delete(ctx, res.uri)
+                    History.add(ctx, res.uri, t)
                     if (wid != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                        Store(ctx).updateConfig(wid) { it.copy(cachedText = t.take(4000)) }
+                        Store(ctx).updateConfig(wid) { it.updatePage(pg) { p -> p.copy(cachedText = t.take(4000)) } }
                     }
                     withContext(Dispatchers.Main) { fileName = res.name }
                     try {
@@ -329,6 +352,7 @@ class EditActivity : ComponentActivity() {
         saveNow()
         val ctx = applicationContext
         val wid = widgetId
+        val pg = page
         FusenApp.scope.launch {
             FusenApp.saveMutex.withLock {
                 val u = uriRef.get() ?: return@withLock
@@ -341,7 +365,7 @@ class EditActivity : ComponentActivity() {
                     Drafts.delete(ctx, u)
                     uriRef.set(r.uri)
                     if (wid != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                        Store(ctx).updateConfig(wid) { it.copy(manualName = true) }
+                        Store(ctx).updateConfig(wid) { it.updatePage(pg) { p -> p.copy(manualName = true) } }
                     }
                     withContext(Dispatchers.Main) {
                         fileName = r.name
@@ -358,7 +382,7 @@ class EditActivity : ComponentActivity() {
 
     private fun backToAutoName() {
         manualName = false
-        if (widgetMode) store.updateConfig(widgetId) { it.copy(manualName = false) }
+        if (widgetMode) store.updateConfig(widgetId) { it.updatePage(page) { p -> p.copy(manualName = false) } }
         lastSaved = FORCE_RESAVE
         saveNow()
     }
@@ -435,6 +459,39 @@ class EditActivity : ComponentActivity() {
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+    /** このページで実際に使う見た目（ページ別の背景色を反映） */
+    private fun shownStyle(): WidgetStyle = style.copy(bgColor = pageBg ?: style.bgColor)
+
+    // ---------- 履歴 ----------
+
+    private fun openHistory() {
+        val u = uriRef.get() ?: return
+        histItems = null
+        histPick = null
+        lifecycleScope.launch {
+            val ctx = applicationContext
+            histItems = withContext(Dispatchers.IO) {
+                History.list(ctx, u).map { v ->
+                    HistItem(v, (History.read(v) ?: "").lineSequence().firstOrNull()?.trim()?.take(40) ?: "")
+                }
+            }
+        }
+    }
+
+    private fun restoreVersion(item: HistItem) {
+        val u = uriRef.get() ?: return
+        val cur = text.text
+        val ctx = applicationContext
+        lifecycleScope.launch {
+            val t = withContext(Dispatchers.IO) {
+                History.add(ctx, u, cur, force = true) // 戻す前の内容も履歴に残す
+                History.read(item.v)
+            }
+            if (t == null) Toast.makeText(ctx, "この版を読み込めませんでした", Toast.LENGTH_SHORT).show()
+            else applyText(TextFieldValue(t, TextRange(t.length)))
+        }
+    }
+
     // ---------- 文字コード ----------
 
     /** 元の文字コードのまま開く（ファイルは変更しない。保存時も同じ文字コードで書く） */
@@ -498,8 +555,8 @@ class EditActivity : ComponentActivity() {
         val focus = remember { FocusRequester() }
         val cs = MaterialTheme.colorScheme
 
-        val editorBg = if (widgetMode) Color(rgbToArgb(style.bgColor)) else cs.surfaceVariant
-        val editorFg = if (widgetMode) Color(rgbToArgb(style.effectiveTextRgb())) else cs.onSurfaceVariant
+        val editorBg = if (widgetMode) Color(rgbToArgb(shownStyle().bgColor)) else cs.surfaceVariant
+        val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else cs.onSurfaceVariant
 
         LaunchedEffect(loaded) {
             if (loaded) {
@@ -521,9 +578,13 @@ class EditActivity : ComponentActivity() {
             }
         }
         // 見た目設定は即ウィジェットへ反映
-        LaunchedEffect(style, loaded) {
+        LaunchedEffect(style, pageBg, pageCount, loaded) {
             if (loaded && widgetMode && !deleted) {
-                store.updateConfig(widgetId) { it.copy(style = style) }
+                val pg = page
+                val bgc = pageBg
+                store.updateConfig(widgetId) {
+                    it.copy(style = style).withPageCount(pageCount).updatePage(pg) { p -> p.copy(bgColor = bgc) }
+                }
                 delay(200)
                 try {
                     FusenWidget().updateAll(applicationContext)
@@ -582,6 +643,11 @@ class EditActivity : ComponentActivity() {
                                         backToAutoName()
                                     })
                                 }
+                                DropdownMenuItem(text = { Text("履歴") }, onClick = {
+                                    menuOpen = false
+                                    openHistory()
+                                    dlg = Dlg.HISTORY
+                                })
                                 if (charsetName != "UTF-8") {
                                     DropdownMenuItem(text = { Text("UTF-8に変換して保存") }, onClick = {
                                         menuOpen = false
@@ -648,11 +714,35 @@ class EditActivity : ComponentActivity() {
                             Modifier.fillMaxWidth().heightIn(max = 300.dp)
                                 .padding(top = 6.dp).verticalScroll(rememberScrollState())
                         ) {
-                            StylePanel(style) { style = it }
+                            StylePanel(
+                                style = shownStyle(),
+                                pageCount = pageCount,
+                                pageNo = page,
+                                onPageCount = { pageCount = it },
+                            ) { ns ->
+                                if (ns.bgColor != (pageBg ?: style.bgColor)) pageBg = ns.bgColor
+                                style = ns.copy(bgColor = style.bgColor)
+                            }
                         }
                     }
                 }
             }
+        }
+
+        histPick?.let { h ->
+            AlertDialog(
+                onDismissRequest = { histPick = null },
+                title = { Text("この版に戻しますか？") },
+                text = { Text("${histFmt.format(Date(h.v.time))} の内容を読み込みます。今の内容も履歴に残り、「↺ 戻す」でも元に戻せます。") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        histPick = null
+                        dlg = Dlg.NONE
+                        restoreVersion(h)
+                    }) { Text("戻す") }
+                },
+                dismissButton = { TextButton(onClick = { histPick = null }) { Text("キャンセル") } },
+            )
         }
 
         pendingEnc?.let { b ->
@@ -666,6 +756,34 @@ class EditActivity : ComponentActivity() {
 
         when (dlg) {
             Dlg.NONE -> {}
+            Dlg.HISTORY -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("履歴") },
+                text = {
+                    val list = histItems
+                    if (list == null) {
+                        Text("読み込み中…")
+                    } else if (list.isEmpty()) {
+                        Text("履歴はまだありません")
+                    } else {
+                        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                            items(list, key = { it.v.time }) { h ->
+                                Column(Modifier.fillMaxWidth().clickable { histPick = h }.padding(vertical = 8.dp)) {
+                                    Text(histFmt.format(Date(h.v.time)), style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        h.preview.ifEmpty { "（空）" },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("閉じる") } },
+            )
             Dlg.DELETE -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },
                 title = { Text("このメモを削除しますか？") },

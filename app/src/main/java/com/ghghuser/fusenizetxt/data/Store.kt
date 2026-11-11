@@ -12,7 +12,8 @@ import org.json.JSONObject
 data class FileMeta(val charset: String = "UTF-8", val crlf: Boolean = false)
 
 class Store(ctx: Context) {
-    private val sp = ctx.applicationContext.getSharedPreferences("fusen", Context.MODE_PRIVATE)
+    private val app = ctx.applicationContext
+    private val sp = app.getSharedPreferences("fusen", Context.MODE_PRIVATE)
 
     companion object {
         private val lock = Any()
@@ -131,10 +132,12 @@ class Store(ctx: Context) {
         if (old == new) return
         synchronized(lock) {
             for (c in allConfigs()) {
-                if (c.fileUri == old) {
-                    sp.edit().putString("w_${c.widgetId}", c.copy(fileUri = new).toJson().toString()).apply()
+                if (c.pages.any { it.fileUri == old }) {
+                    val n = c.copy(pages = c.pages.map { if (it.fileUri == old) it.copy(fileUri = new) else it })
+                    sp.edit().putString("w_${c.widgetId}", n.toJson().toString()).apply()
                 }
             }
+            History.rename(app, old, new)
             val fav = favorites()
             if (old in fav) {
                 sp.edit().putStringSet("fav", (fav - old) + new).apply()
@@ -161,13 +164,14 @@ class Store(ctx: Context) {
     fun removeUri(uri: String) {
         synchronized(lock) {
             for (c in allConfigs()) {
-                if (c.fileUri == uri) {
-                    sp.edit().putString(
-                        "w_${c.widgetId}",
-                        c.copy(fileUri = null, manualName = false, cachedText = "").toJson().toString()
-                    ).apply()
+                if (c.pages.any { it.fileUri == uri }) {
+                    val n = c.copy(pages = c.pages.map {
+                        if (it.fileUri == uri) PageCfg(bgColor = it.bgColor) else it
+                    })
+                    sp.edit().putString("w_${c.widgetId}", n.toJson().toString()).apply()
                 }
             }
+            History.clear(app, uri)
             sp.edit().putStringSet("fav", favorites() - uri).apply()
             val created = readObj("created")
             created.remove(uri)

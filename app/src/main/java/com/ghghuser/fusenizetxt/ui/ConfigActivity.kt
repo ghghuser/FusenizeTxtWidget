@@ -78,6 +78,7 @@ fun persistTreeUri(ctx: Context, uri: Uri): Boolean {
  */
 class ConfigActivity : ComponentActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+    private var page = 0
     private var busy = false
     private val importer = ImportCoordinator()
 
@@ -86,6 +87,7 @@ class ConfigActivity : ComponentActivity() {
         enableEdgeToEdge()
         setResult(Activity.RESULT_CANCELED)
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        page = intent.getIntExtra(EditActivity.EXTRA_PAGE, 0)
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             finish()
             return
@@ -102,7 +104,10 @@ class ConfigActivity : ComponentActivity() {
             return
         }
         val manual = !MemoRepo.hasNumberPrefix(name)
-        Store(this).updateConfig(widgetId) { it.copy(fileUri = uri.toString(), manualName = manual, cachedText = "") }
+        val pg = page
+        Store(this).updateConfig(widgetId) {
+            it.updatePage(pg) { p -> p.copy(fileUri = uri.toString(), manualName = manual, cachedText = "") }.copy(current = pg)
+        }
         Store(this).addRecent(uri.toString())
         lifecycleScope.launch {
             try {
