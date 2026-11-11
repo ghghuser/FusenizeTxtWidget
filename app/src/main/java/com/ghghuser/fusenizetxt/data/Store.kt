@@ -238,7 +238,7 @@ class Store(ctx: Context) {
         }
 
     var listBgAlpha: Int
-        get() = sp.getInt("listBgA", 200)
+        get() = sp.getInt("listBgA", 180)
         set(v) {
             sp.edit().putInt("listBgA", v.coerceIn(0, 255)).apply()
         }

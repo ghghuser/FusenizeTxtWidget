@@ -27,10 +27,10 @@ data class Insets(val l: Int = 0, val t: Int = 0, val r: Int = 0, val b: Int = 0
 }
 
 data class WidgetStyle(
-    val bgColor: Int = 0xFFF59D,
+    val bgColor: Int = 0x1B2A5E, // 紺色
     val bgAlpha: Int = 200,
     val autoText: Boolean = true, // 背景色に合わせて文字色を自動で決める
-    val textColor: Int = 0x212121,
+    val textColor: Int = 0xF5F5F5, // 明るい文字（autoText=trueなら背景に合わせて自動）
     val textSizeSp: Int = 16,
     val hAlign: Int = 0, // 0=左 1=中央 2=右
     val vAlign: Int = 0, // 0=上 1=中央 2=下
@@ -72,7 +72,7 @@ data class WidgetStyle(
 const val MAX_PAGES = 5
 
 /** 追加したページの初期背景色（ページごとに色が違う） */
-val PAGE_COLORS = listOf(0xFFF59D, 0xC8E6C9, 0xBBDEFB, 0xFFCCBC, 0xE1BEE7)
+val PAGE_COLORS = listOf(0x1B2A5E, 0x1E4D3A, 0x4A2D6B, 0x6B3A1E, 0x1E5560)
 
 /** ウィジェットの1ページ分（1ページ = 1つのtxt） */
 data class PageCfg(

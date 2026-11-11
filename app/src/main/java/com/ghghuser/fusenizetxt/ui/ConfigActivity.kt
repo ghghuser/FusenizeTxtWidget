@@ -50,6 +50,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
+import com.ghghuser.fusenizetxt.FusenApp
 import com.ghghuser.fusenizetxt.data.Importer
 import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
@@ -80,18 +81,23 @@ class ConfigActivity : ComponentActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var page = 0
     private var busy = false
+    private var completed = false
+    private var errorText by mutableStateOf<String?>(null)
     private val importer = ImportCoordinator()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setResult(Activity.RESULT_CANCELED)
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         page = intent.getIntExtra(EditActivity.EXTRA_PAGE, 0)
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+            setResult(Activity.RESULT_CANCELED)
             finish()
             return
         }
+        // 何も選ばずに閉じてもウィジェットは残し（「タップしてメモを選択」と表示され、タップで再設定できる）、
+        // ランチャーが反応しないウィジェットを残したり、別のウィジェットを消したりしないようにする
+        setResult(Activity.RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
         setContent { FusenTheme { ConfigScreen() } }
     }
 
@@ -99,24 +105,37 @@ class ConfigActivity : ComponentActivity() {
 
     private fun finishWith(name: String?, uri: Uri?) {
         if (uri == null) {
-            toast("メモを用意できませんでした")
+            errorText = "メモを用意できませんでした（保存先に作成できませんでした）"
             busy = false
             return
         }
-        val manual = !MemoRepo.hasNumberPrefix(name)
-        val pg = page
-        Store(this).updateConfig(widgetId) {
-            it.updatePage(pg) { p -> p.copy(fileUri = uri.toString(), manualName = manual, cachedText = "") }.copy(current = pg)
-        }
-        Store(this).addRecent(uri.toString())
         lifecycleScope.launch {
-            try {
-                FusenWidget().updateAll(this@ConfigActivity)
-            } catch (e: Exception) {
-                // 更新失敗でも設定は保存済み
+            // 読み込める状態か確認してから紐付ける（読めないメモを紐付けて「読み込めません」になるのを防ぐ）
+            val err = withContext(Dispatchers.IO) { MemoRepo.verifyReadable(applicationContext, uri) }
+            if (err != null) {
+                errorText = "作成したメモを開けませんでした\n$err"
+                busy = false
+                return@launch
             }
+            val manual = !MemoRepo.hasNumberPrefix(name)
+            val pg = page
+            Store(this@ConfigActivity).updateConfig(widgetId) {
+                it.updatePage(pg) { p -> p.copy(fileUri = uri.toString(), manualName = manual, cachedText = "") }.copy(current = pg)
+            }
+            Store(this@ConfigActivity).addRecent(uri.toString())
+            completed = true
+            // 先に結果を返して閉じる。ウィジェットの再描画は完了を待たない
             setResult(Activity.RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
             finish()
+            FusenApp.refreshWidgets(applicationContext)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 何も選ばずに閉じた場合でも、ホームに残ったウィジェットが「タップして選択」と表示されて反応するようにする
+        if (!completed && isFinishing && widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            FusenApp.refreshWidgets(applicationContext)
         }
     }
 
@@ -186,6 +205,9 @@ class ConfigActivity : ComponentActivity() {
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("付箋の設定", style = MaterialTheme.typography.titleLarge)
+                    errorText?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                     if (!showFiles) {
                         Text("保存先: $storage", style = MaterialTheme.typography.bodySmall)
                         Button(

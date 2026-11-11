@@ -335,7 +335,7 @@ class EditActivity : ComponentActivity() {
                     }
                     withContext(Dispatchers.Main) { fileName = res.name }
                     try {
-                        FusenWidget().updateAll(ctx)
+                        FusenApp.refreshWidgets(ctx)
                     } catch (e: Exception) {
                     }
                 }
@@ -372,7 +372,7 @@ class EditActivity : ComponentActivity() {
                         manualName = true
                     }
                     try {
-                        FusenWidget().updateAll(ctx)
+                        FusenApp.refreshWidgets(ctx)
                     } catch (e: Exception) {
                     }
                 }
@@ -408,7 +408,7 @@ class EditActivity : ComponentActivity() {
                     }
                 }
                 try {
-                    FusenWidget().updateAll(ctx)
+                    FusenApp.refreshWidgets(ctx)
                 } catch (e: Exception) {
                 }
                 withContext(Dispatchers.Main) { finish() }
@@ -587,7 +587,7 @@ class EditActivity : ComponentActivity() {
                 }
                 delay(200)
                 try {
-                    FusenWidget().updateAll(applicationContext)
+                    FusenApp.refreshWidgets(applicationContext)
                 } catch (e: Exception) {
                 }
             }

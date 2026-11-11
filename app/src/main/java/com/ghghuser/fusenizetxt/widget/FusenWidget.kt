@@ -72,7 +72,7 @@ class FusenWidget : GlanceAppWidget() {
             !MemoRepo.exists(context, uri) -> "ファイルが見つかりません\nタップして再設定" to true
             read.exceptionOrNull() is MemoRepo.EncodingException -> "文字コードの確認が必要です\nタップして開く" to true
             cfg.cachedText.isNotEmpty() -> cfg.cachedText.take(MAX_WIDGET_CHARS) to false
-            else -> "読み込めません" to true
+            else -> ("読み込めません\n" + (read.exceptionOrNull()?.message ?: "")) to true
         }
     }
 }

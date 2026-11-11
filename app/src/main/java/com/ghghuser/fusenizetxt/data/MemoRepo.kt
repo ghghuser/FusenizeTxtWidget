@@ -8,6 +8,9 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.InputStream
+import android.os.ParcelFileDescriptor
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.CharacterCodingException
@@ -58,6 +61,22 @@ object MemoRepo {
     private val filesUri: Uri get() = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
 
     fun isMedia(uri: Uri): Boolean = uri.authority == MediaStore.AUTHORITY
+
+    /**
+     * アプリ内のフォルダに作ったメモ（file://）。MediaStore（Documents/FusenizeTxtWidget）に作ったメモが
+     * 作成直後に読めない端末で、自動的にこちらへ切り替える。保存フォルダを設定すると移動される。
+     */
+    fun isLocal(uri: Uri): Boolean = uri.scheme == "file"
+
+    private fun localDir(ctx: Context): File = File(ctx.filesDir, "memos").apply { mkdirs() }
+
+    private fun listLocal(ctx: Context): List<Entry> = try {
+        (localDir(ctx).listFiles() ?: emptyArray())
+            .filter { it.isFile && it.name.endsWith(".txt", ignoreCase = true) }
+            .map { Entry(Uri.fromFile(it), it.name, it.lastModified()) }
+    } catch (e: Exception) {
+        emptyList()
+    }
 
     private fun treeDoc(ctx: Context): DocumentFile? {
         val t = Store(ctx).treeUri ?: return null
@@ -123,7 +142,7 @@ object MemoRepo {
         } catch (e: Exception) {
             // 一覧を取れなければ空として扱う
         }
-        return out
+        return out + listLocal(ctx)
     }
 
     // ------------------------------------------------------------
@@ -176,7 +195,9 @@ object MemoRepo {
     }
 
     fun displayName(ctx: Context, uri: Uri): String? = try {
-        if (isMedia(uri)) {
+        if (isLocal(uri)) {
+            File(uri.path ?: "").name
+        } else if (isMedia(uri)) {
             ctx.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                 if (c.moveToFirst()) c.getString(0) else null
             }
@@ -186,14 +207,16 @@ object MemoRepo {
     }
 
     fun lastModified(ctx: Context, uri: Uri): Long = try {
-        if (isMedia(uri)) (queryMediaLong(ctx, uri, MediaStore.MediaColumns.DATE_MODIFIED) ?: 0L) * 1000
+        if (isLocal(uri)) File(uri.path ?: "").lastModified()
+        else if (isMedia(uri)) (queryMediaLong(ctx, uri, MediaStore.MediaColumns.DATE_MODIFIED) ?: 0L) * 1000
         else DocumentFile.fromSingleUri(ctx, uri)?.lastModified() ?: 0L
     } catch (e: Exception) {
         0L
     }
 
     fun exists(ctx: Context, uri: Uri): Boolean = try {
-        if (isMedia(uri)) queryMediaLong(ctx, uri, MediaStore.MediaColumns._ID) != null
+        if (isLocal(uri)) File(uri.path ?: "").exists()
+        else if (isMedia(uri)) queryMediaLong(ctx, uri, MediaStore.MediaColumns._ID) != null
         else DocumentFile.fromSingleUri(ctx, uri)?.exists() == true
     } catch (e: Exception) {
         false
@@ -261,15 +284,53 @@ object MemoRepo {
      */
     fun readText(ctx: Context, uri: Uri): Result<FileText> {
         return try {
-            val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                ?: return Result.failure(ReadError("ファイルを開けませんでした"))
+            val bytes = openIn(ctx, uri).use { it.readBytes() }
             if (bytes.size > MAX_BYTES) return Result.failure(ReadError("ファイルが大きすぎます（2MBまで）"))
             val meta = Store(ctx).meta(uri.toString())
             val decoded = tryDecode(bytes, meta.charset) ?: return Result.failure(EncodingException(bytes))
             Result.success(FileText(decoded, meta.crlf || hasCrlf(bytes, meta.charset)))
         } catch (e: Exception) {
-            Result.failure(ReadError("読み込みに失敗しました"))
+            Result.failure(ReadError("読み込めません（${describe(e)}）"))
         }
+    }
+
+    /** 失敗の原因を短く表す（画面に出して原因を切り分けられるようにする） */
+    fun describe(e: Throwable): String = "${e.javaClass.simpleName}: ${e.message ?: ""}".take(140)
+
+    /**
+     * 読み取り用のストリームを開く。通常の方法で開けなければ、ファイル記述子、
+     * MediaStoreのファイルパスの順に試す。すべて失敗したら最初の例外を投げる。
+     */
+    private fun openIn(ctx: Context, uri: Uri): InputStream {
+        var first: Exception? = null
+        try {
+            ctx.contentResolver.openInputStream(uri)?.let { return it }
+        } catch (e: Exception) {
+            first = e
+        }
+        try {
+            ctx.contentResolver.openFileDescriptor(uri, "r")?.let { return ParcelFileDescriptor.AutoCloseInputStream(it) }
+        } catch (e: Exception) {
+            if (first == null) first = e
+        }
+        if (isMedia(uri)) {
+            try {
+                @Suppress("DEPRECATION")
+                val path = ctx.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)
+                    ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+                if (path != null) return File(path).inputStream()
+            } catch (e: Exception) {
+                if (first == null) first = e
+            }
+        }
+        throw first ?: FileNotFoundException("ストリームを開けませんでした")
+    }
+
+    /** 読み込めるか確認する。読めれば null、読めなければ原因の文字列（文字コードの確認が必要な場合は読めた扱い） */
+    fun verifyReadable(ctx: Context, uri: Uri): String? {
+        val r = readText(ctx, uri)
+        if (r.isSuccess || r.exceptionOrNull() is EncodingException) return null
+        return r.exceptionOrNull()?.message ?: "読み込めません"
     }
 
     fun hasCrlf(bytes: ByteArray, charset: String): Boolean {
@@ -299,19 +360,49 @@ object MemoRepo {
                 }
                 return Saved(f.uri, f.name ?: name)
             }
-            val cv = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, REL_PATH)
+            // Documents/FusenizeTxtWidget に作る。作成直後に読めなければ破棄してアプリ内フォルダに作る
+            val viaMedia = try {
+                createInMediaStore(ctx, name, bytes)
+            } catch (e: Exception) {
+                null
             }
-            val uri = ctx.contentResolver.insert(filesUri, cv) ?: return null
-            if (bytes != null) {
-                ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: return null
-            }
-            return Saved(uri, displayName(ctx, uri) ?: name)
+            return viaMedia ?: createLocal(ctx, name, bytes)
         } catch (e: Exception) {
             return null
         }
+    }
+
+    private fun createInMediaStore(ctx: Context, name: String, bytes: ByteArray?): Saved? {
+        val cv = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, REL_PATH)
+        }
+        val uri = ctx.contentResolver.insert(filesUri, cv) ?: return null
+        try {
+            if (bytes != null) {
+                ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) }
+                    ?: throw FileNotFoundException("書き込み用ストリームを開けませんでした")
+            }
+            openIn(ctx, uri).use { it.read() } // 作成直後に読めることを確認する
+        } catch (e: Exception) {
+            try {
+                ctx.contentResolver.delete(uri, null, null)
+            } catch (e2: Exception) {
+            }
+            return null
+        }
+        return Saved(uri, displayName(ctx, uri) ?: name)
+    }
+
+    private fun createLocal(ctx: Context, name: String, bytes: ByteArray?): Saved? = try {
+        val f = File(localDir(ctx), name)
+        if (f.exists()) null else {
+            f.writeBytes(bytes ?: ByteArray(0))
+            Saved(Uri.fromFile(f), f.name)
+        }
+    } catch (e: Exception) {
+        null
     }
 
     fun createNew(ctx: Context): Saved? {
@@ -366,7 +457,14 @@ object MemoRepo {
         current?.let { taken.remove(it.lowercase()) }
         val target = uniqueName(want, taken)
         return try {
-            if (isMedia(uri)) {
+            if (isLocal(uri)) {
+                val src = File(uri.path ?: return null)
+                val dst = File(src.parentFile, target)
+                if (!src.renameTo(dst)) return null
+                val newUri = Uri.fromFile(dst)
+                Store(ctx).replaceUri(uri.toString(), newUri.toString())
+                Saved(newUri, dst.name)
+            } else if (isMedia(uri)) {
                 val cv = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, target) }
                 if (ctx.contentResolver.update(uri, cv, null, null) <= 0) return null
                 Saved(uri, displayName(ctx, uri) ?: target)
@@ -381,7 +479,8 @@ object MemoRepo {
     }
 
     fun delete(ctx: Context, uri: Uri): Boolean = try {
-        if (isMedia(uri)) ctx.contentResolver.delete(uri, null, null) > 0
+        if (isLocal(uri)) File(uri.path ?: "").delete()
+        else if (isMedia(uri)) ctx.contentResolver.delete(uri, null, null) > 0
         else DocumentsContract.deleteDocument(ctx.contentResolver, uri)
     } catch (e: Exception) {
         false
@@ -422,7 +521,7 @@ object MemoRepo {
     // ------------------------------------------------------------
 
     fun readBytes(ctx: Context, uri: Uri): ByteArray? = try {
-        ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }?.takeIf { it.size <= MAX_COPY_BYTES }
+        openIn(ctx, uri).use { it.readBytes() }.takeIf { it.size <= MAX_COPY_BYTES }
     } catch (e: Exception) {
         null
     }

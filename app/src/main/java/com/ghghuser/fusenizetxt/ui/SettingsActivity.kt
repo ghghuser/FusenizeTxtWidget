@@ -265,15 +265,15 @@ class SettingsActivity : ComponentActivity() {
                     listBg = it
                     store.listBgColor = it
                 }
-                SliderRow("背景の透過度（255=不透明、初期値200）", listAlpha, 0, 255) {
+                SliderRow("背景の透過度（255=不透明、初期値180）", listAlpha, 0, 255) {
                     listAlpha = it
                     store.listBgAlpha = it
                 }
                 TextButton(onClick = {
                     listBg = null
-                    listAlpha = 200
+                    listAlpha = 180
                     store.listBgColor = null
-                    store.listBgAlpha = 200
+                    store.listBgAlpha = 180
                 }) { Text("テーマ既定に戻す") }
                 HorizontalDivider()
                 Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
