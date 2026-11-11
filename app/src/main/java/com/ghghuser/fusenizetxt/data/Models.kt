@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.data
+package com.ghghuser.fusenizetxt.data
 
 import org.json.JSONObject
 

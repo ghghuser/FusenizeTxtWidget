@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.widget
+package com.ghghuser.fusenizetxt.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -29,12 +29,12 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import com.ghghuser.fusenize.data.MemoRepo
-import com.ghghuser.fusenize.data.Store
-import com.ghghuser.fusenize.data.WidgetConfig
-import com.ghghuser.fusenize.data.rgbToArgb
-import com.ghghuser.fusenize.ui.ConfigActivity
-import com.ghghuser.fusenize.ui.EditActivity
+import com.ghghuser.fusenizetxt.data.MemoRepo
+import com.ghghuser.fusenizetxt.data.Store
+import com.ghghuser.fusenizetxt.data.WidgetConfig
+import com.ghghuser.fusenizetxt.data.rgbToArgb
+import com.ghghuser.fusenizetxt.ui.ConfigActivity
+import com.ghghuser.fusenizetxt.ui.EditActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

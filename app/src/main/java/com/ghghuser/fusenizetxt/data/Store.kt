@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.data
+package com.ghghuser.fusenizetxt.data
 
 import android.content.Context
 import org.json.JSONArray

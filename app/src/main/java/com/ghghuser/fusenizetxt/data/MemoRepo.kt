@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.data
+package com.ghghuser.fusenizetxt.data
 
 import android.content.ContentUris
 import android.content.ContentValues
@@ -18,12 +18,12 @@ import java.security.MessageDigest
 /**
  * txtの読み書き。
  *  - 保存フォルダ（SAF）が設定されていればそのフォルダ
- *  - 未設定なら MediaStore 経由で Documents/FusenizeWidget に自動作成して保存
+ *  - 未設定なら MediaStore 経由で Documents/FusenizeTxtWidget に自動作成して保存
  * どちらのURIでも同じ関数で扱えるようにしている。
  */
 object MemoRepo {
-    const val DEFAULT_FOLDER_LABEL = "Documents/FusenizeWidget"
-    private const val REL_PATH = "Documents/FusenizeWidget/"
+    const val DEFAULT_FOLDER_LABEL = "Documents/FusenizeTxtWidget"
+    private const val REL_PATH = "Documents/FusenizeTxtWidget/"
     private const val MAX_BYTES = 2 * 1024 * 1024
     private const val MAX_COPY_BYTES = 8 * 1024 * 1024
     private const val MAX_ORIG_BACKUPS = 100
@@ -75,7 +75,7 @@ object MemoRepo {
         }
     }
 
-    /** SAFの保存フォルダを使っているか（false なら Documents/FusenizeWidget） */
+    /** SAFの保存フォルダを使っているか（false なら Documents/FusenizeTxtWidget） */
     fun usingTree(ctx: Context): Boolean = hasFolderPermission(ctx) && treeDoc(ctx) != null
 
     fun storageLabel(ctx: Context): String =
@@ -88,7 +88,7 @@ object MemoRepo {
     /** 現在の保存先のtxt一覧 */
     fun listTxt(ctx: Context): List<Entry> = if (usingTree(ctx)) listTree(ctx) else listMedia(ctx)
 
-    /** 自動作成フォルダ（Documents/FusenizeWidget）内のtxt一覧 */
+    /** 自動作成フォルダ（Documents/FusenizeTxtWidget）内のtxt一覧 */
     fun listDefault(ctx: Context): List<Entry> = listMedia(ctx)
 
     private fun listTree(ctx: Context): List<Entry> {

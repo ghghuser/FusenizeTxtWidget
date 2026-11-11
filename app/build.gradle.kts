@@ -8,13 +8,13 @@ plugins {
 val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
 
 android {
-    namespace = "com.ghghuser.fusenize"
+    namespace = "com.ghghuser.fusenizetxt"
     // ランナーにSDK 35が無い場合は 34 に下げる（build.ymlで35を導入するので通常は不要）
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.ghghuser.fusenize"
-        minSdk = 29 // 保存フォルダ未設定時に Documents/FusenizeWidget へ保存するため（MediaStore）
+        applicationId = "com.ghghuser.fusenizetxt"
+        minSdk = 29 // 保存フォルダ未設定時に Documents/FusenizeTxtWidget へ保存するため（MediaStore）
         targetSdk = 35
         versionCode = buildNumber
         versionName = "0.2.$buildNumber"

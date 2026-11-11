@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.ui
+package com.ghghuser.fusenizetxt.ui
 
 import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
@@ -69,14 +69,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
-import com.ghghuser.fusenize.FusenApp
-import com.ghghuser.fusenize.data.Drafts
-import com.ghghuser.fusenize.data.FileMeta
-import com.ghghuser.fusenize.data.MemoRepo
-import com.ghghuser.fusenize.data.Store
-import com.ghghuser.fusenize.data.WidgetStyle
-import com.ghghuser.fusenize.data.rgbToArgb
-import com.ghghuser.fusenize.widget.FusenWidget
+import com.ghghuser.fusenizetxt.FusenApp
+import com.ghghuser.fusenizetxt.data.Drafts
+import com.ghghuser.fusenizetxt.data.FileMeta
+import com.ghghuser.fusenizetxt.data.MemoRepo
+import com.ghghuser.fusenizetxt.data.Store
+import com.ghghuser.fusenizetxt.data.WidgetStyle
+import com.ghghuser.fusenizetxt.data.rgbToArgb
+import com.ghghuser.fusenizetxt.widget.FusenWidget
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

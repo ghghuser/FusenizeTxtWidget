@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.ui
+package com.ghghuser.fusenizetxt.ui
 
 import android.app.Activity
 import android.appwidget.AppWidgetManager
@@ -50,10 +50,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
-import com.ghghuser.fusenize.data.Importer
-import com.ghghuser.fusenize.data.MemoRepo
-import com.ghghuser.fusenize.data.Store
-import com.ghghuser.fusenize.widget.FusenWidget
+import com.ghghuser.fusenizetxt.data.Importer
+import com.ghghuser.fusenizetxt.data.MemoRepo
+import com.ghghuser.fusenizetxt.data.Store
+import com.ghghuser.fusenizetxt.widget.FusenWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,7 +74,7 @@ fun persistTreeUri(ctx: Context, uri: Uri): Boolean {
 
 /**
  * ウィジェット追加時（または未設定ウィジェットのタップ時）に開く設定画面。
- * 保存フォルダが未設定でも Documents/FusenizeWidget に自動作成して新規メモを作れる。
+ * 保存フォルダが未設定でも Documents/FusenizeTxtWidget に自動作成して新規メモを作れる。
  */
 class ConfigActivity : ComponentActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID

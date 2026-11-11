@@ -35,10 +35,10 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk "dist/FusenizeWidget-${{ github.run_number }}-debug.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/FusenizeTxtWidget-build${{ github.run_number }}-debug.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FusenizeWidget-${{ github.run_number }}-debug
-          path: dist/FusenizeWidget-${{ github.run_number }}-debug.apk
+          name: FusenizeTxtWidget-build${{ github.run_number }}-debug
+          path: dist/FusenizeTxtWidget-build${{ github.run_number }}-debug.apk
           if-no-files-found: error

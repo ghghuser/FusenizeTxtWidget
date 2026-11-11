@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FusenizeWidget"
+rootProject.name = "FusenizeTxtWidget"
 include(":app")

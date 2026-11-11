@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.ui
+package com.ghghuser.fusenizetxt.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,7 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.ghghuser.fusenize.data.rgbToArgb
+import com.ghghuser.fusenizetxt.data.rgbToArgb
 import kotlin.math.roundToInt
 
 @Composable

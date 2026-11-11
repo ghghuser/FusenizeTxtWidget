@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.ui
+package com.ghghuser.fusenizetxt.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -15,8 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.ghghuser.fusenize.data.Importer
-import com.ghghuser.fusenize.data.MemoRepo
+import com.ghghuser.fusenizetxt.data.Importer
+import com.ghghuser.fusenizetxt.data.MemoRepo
 import kotlinx.coroutines.CompletableDeferred
 
 class ConflictAsk(

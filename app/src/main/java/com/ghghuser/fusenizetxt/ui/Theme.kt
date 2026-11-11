@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.ui
+package com.ghghuser.fusenizetxt.ui
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme

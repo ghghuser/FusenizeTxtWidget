@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.ghghuser.fusenize.ui
+package com.ghghuser.fusenizetxt.ui
 
 import android.content.Intent
 import android.net.Uri
@@ -57,10 +57,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
-import com.ghghuser.fusenize.data.Importer
-import com.ghghuser.fusenize.data.MemoRepo
-import com.ghghuser.fusenize.data.Store
-import com.ghghuser.fusenize.data.rgbToArgb
+import com.ghghuser.fusenizetxt.data.Importer
+import com.ghghuser.fusenizetxt.data.MemoRepo
+import com.ghghuser.fusenizetxt.data.Store
+import com.ghghuser.fusenizetxt.data.rgbToArgb
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -207,7 +207,7 @@ class MainActivity : ComponentActivity() {
         ) { pad ->
             Column(Modifier.padding(pad).fillMaxSize()) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Fusenize", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleLarge, color = onBg)
+                    Text("FusenizeTxt", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleLarge, color = onBg)
                     IconButton(onClick = { showSettings = true }, modifier = Modifier.size(52.dp)) { Text("⚙", fontSize = 28.sp, color = onBg) }
                 }
                 TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {

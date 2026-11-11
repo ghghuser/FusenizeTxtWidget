@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize
+package com.ghghuser.fusenizetxt
 
 import android.app.Application
 import kotlinx.coroutines.CoroutineScope

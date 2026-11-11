@@ -1,4 +1,4 @@
-package com.ghghuser.fusenize.data
+package com.ghghuser.fusenizetxt.data
 
 import android.content.Context
 import android.net.Uri
@@ -103,7 +103,7 @@ object Importer {
         return Summary(done, over, failed, false, entries)
     }
 
-    /** 保存フォルダを設定した後、Documents/FusenizeWidget にあったメモを新しい保存先へ移動する */
+    /** 保存フォルダを設定した後、Documents/FusenizeTxtWidget にあったメモを新しい保存先へ移動する */
     suspend fun migrateDefault(
         ctx: Context,
         ask: suspend (name: String, remaining: Int) -> ConflictDecision?,
