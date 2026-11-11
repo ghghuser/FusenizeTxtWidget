@@ -75,7 +75,7 @@ object ZipTools {
                 if (e.isDirectory) continue
                 if (++count > MAX_ENTRIES) {
                     skipped++
-                    continue
+                    break
                 }
                 val base = e.name.substringAfterLast('/').substringAfterLast('\\')
                 val isMeta = base == META_NAME
@@ -83,8 +83,9 @@ object ZipTools {
                 if (!isMeta && !isTxt) continue
                 val bytes = readLimited(zip, MAX_ENTRY_BYTES)
                 if (bytes == null) {
+                    // 上限を超えるエントリ。展開を続けると時間と容量を浪費するため、ここで読み込みを打ち切る
                     skipped++
-                    continue
+                    break
                 }
                 total += bytes.size
                 if (total > MAX_TOTAL_BYTES) {
@@ -114,19 +115,17 @@ object ZipTools {
         return ZipContent(items, fav, created, skipped)
     }
 
-    /** 制限を超えたら null（zip爆弾対策のため、実際に読んだバイト数で判定する） */
+    /** 制限を超えたら即座に null（zip爆弾対策のため、実際に展開したバイト数で判定する） */
     private fun readLimited(input: InputStream, limit: Int): ByteArray? {
         val buf = java.io.ByteArrayOutputStream()
         val tmp = ByteArray(16 * 1024)
-        var over = false
         while (true) {
             val r = input.read(tmp)
             if (r < 0) break
-            if (!over) {
-                if (buf.size() + r > limit) over = true else buf.write(tmp, 0, r)
-            }
+            if (buf.size() + r > limit) return null
+            buf.write(tmp, 0, r)
         }
-        return if (over) null else buf.toByteArray()
+        return buf.toByteArray()
     }
 
     /** 取り込んだファイルに、zip内のお気に入り・作成日時を反映する */

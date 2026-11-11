@@ -29,6 +29,25 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      # icon/icon.png（正方形のPNG、1024x1024推奨）をリポジトリに置くと、アプリアイコンとして使われる
+      - name: Apply custom launcher icon
+        run: |
+          if [ -f icon/icon.png ]; then
+            command -v convert >/dev/null || sudo apt-get install -y imagemagick
+            mkdir -p app/src/main/res/drawable-nodpi
+            convert icon/icon.png -background none -resize 432x432 -gravity center -extent 432x432 \
+              app/src/main/res/drawable-nodpi/ic_launcher_custom.png
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="utf-8"?>' \
+              '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">' \
+              '    <background android:drawable="@color/ic_launcher_background" />' \
+              '    <foreground android:drawable="@drawable/ic_launcher_custom" />' \
+              '</adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+            echo "custom icon applied"
+          else
+            echo "no icon/icon.png - using default icon"
+          fi
+
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace -PbuildNumber=${{ github.run_number }}
 
