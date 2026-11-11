@@ -2,8 +2,7 @@ package com.ghghuser.fusenizetxt
 
 import android.app.Application
 import android.content.Context
-import androidx.glance.appwidget.updateAll
-import com.ghghuser.fusenizetxt.widget.FusenWidget
+import com.ghghuser.fusenizetxt.widget.WidgetRender
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.CoroutineScope
@@ -33,7 +32,7 @@ class FusenApp : Application() {
             val app = ctx.applicationContext
             scope.launch {
                 try {
-                    withTimeout(15_000) { FusenWidget().updateAll(app) }
+                    withTimeout(15_000) { WidgetRender.updateAll(app) }
                 } catch (e: Exception) {
                     // 再描画に失敗しても保存済みの内容には影響しない
                 }

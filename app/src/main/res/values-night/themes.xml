@@ -4,7 +4,6 @@
 
     <style name="Theme.Fusen.Main" parent="Theme.Fusen">
         <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowShowWallpaper">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
     </style>
 

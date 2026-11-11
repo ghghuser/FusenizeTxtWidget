@@ -29,6 +29,8 @@
         <activity
             android:name=".ui.ConfigActivity"
             android:exported="true"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
             android:theme="@style/Theme.Fusen.Transparent"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode">
             <intent-filter>
@@ -40,9 +42,15 @@
         <activity
             android:name=".ui.EditActivity"
             android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
             android:theme="@style/Theme.Fusen.Transparent"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
+
+        <receiver
+            android:name=".widget.PageSwitchReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".widget.FusenReceiver"

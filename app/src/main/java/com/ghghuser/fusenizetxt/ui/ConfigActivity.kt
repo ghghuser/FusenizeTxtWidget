@@ -48,13 +48,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
 import com.ghghuser.fusenizetxt.FusenApp
 import com.ghghuser.fusenizetxt.data.Importer
 import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
-import com.ghghuser.fusenizetxt.widget.FusenWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

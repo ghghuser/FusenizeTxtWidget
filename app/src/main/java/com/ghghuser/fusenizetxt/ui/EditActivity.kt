@@ -69,7 +69,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.lifecycleScope
 import com.ghghuser.fusenizetxt.FusenApp
 import com.ghghuser.fusenizetxt.data.Drafts
@@ -79,7 +78,6 @@ import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
 import com.ghghuser.fusenizetxt.data.WidgetStyle
 import com.ghghuser.fusenizetxt.data.rgbToArgb
-import com.ghghuser.fusenizetxt.widget.FusenWidget
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
