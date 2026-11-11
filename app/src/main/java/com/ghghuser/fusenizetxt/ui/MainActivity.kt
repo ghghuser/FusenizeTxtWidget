@@ -79,32 +79,7 @@ private data class MemoRow(
 /** アプリアイコンから起動した時の一覧画面（開いたファイル / フォルダ内） */
 class MainActivity : ComponentActivity() {
     private val dateFmt = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
-    private val importer = ImportCoordinator()
-
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
-
-    private fun versionName(): String = try {
-        packageManager.getPackageInfo(packageName, 0).versionName ?: ""
-    } catch (e: Exception) {
-        ""
-    }
-
-    private suspend fun doImport(uris: List<Uri>) {
-        val ctx = applicationContext
-        val items = withContext(Dispatchers.IO) { uris.mapNotNull { Importer.readItem(ctx, it) } }
-        if (items.isEmpty()) {
-            toast("取り込めるtxtがありませんでした")
-            return
-        }
-        val r = Importer.run(ctx, items, false) { n, rem -> importer.askConflict(n, rem) }
-        toast(r.describe("取り込み"))
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent { FusenTheme { MainScreen() } }
-    }
 
     private fun openEditor(uri: Uri) {
         startActivity(Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()))
@@ -134,40 +109,17 @@ class MainActivity : ComponentActivity() {
         var tick by remember { mutableIntStateOf(0) }
         var sort by remember { mutableIntStateOf(store.sortMode) }
         var rows by remember { mutableStateOf<List<MemoRow>>(emptyList()) }
-        var showSettings by remember { mutableStateOf(false) }
         var listBg by remember { mutableStateOf(store.listBgColor) }
         var listAlpha by remember { mutableIntStateOf(store.listBgAlpha) }
         var storage by remember { mutableStateOf(MemoRepo.storageLabel(this)) }
-
-        val treePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri != null) {
-                if (persistTreeUri(this, uri)) {
-                    storage = MemoRepo.storageLabel(this)
-                    lifecycleScope.launch {
-                        val r = Importer.migrateDefault(applicationContext) { n, rem -> importer.askConflict(n, rem) }
-                        if (r != null) toast(r.describe("移動"))
-                        tick++
-                    }
-                } else {
-                    toast("フォルダの権限を保持できませんでした")
-                }
-            }
-        }
-
-        val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-            if (uris.isNotEmpty()) {
-                lifecycleScope.launch {
-                    doImport(uris)
-                    tick++
-                }
-            }
-        }
 
         val owner = LocalLifecycleOwner.current
         DisposableEffect(owner) {
             val obs = LifecycleEventObserver { _, e ->
                 if (e == Lifecycle.Event.ON_RESUME) {
                     storage = MemoRepo.storageLabel(this@MainActivity)
+                    listBg = store.listBgColor
+                    listAlpha = store.listBgAlpha
                     tick++
                 }
             }
@@ -208,7 +160,7 @@ class MainActivity : ComponentActivity() {
             Column(Modifier.padding(pad).fillMaxSize()) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("FusenizeTxt", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleLarge, color = onBg)
-                    IconButton(onClick = { showSettings = true }, modifier = Modifier.size(52.dp)) { Text("⚙", fontSize = 28.sp, color = onBg) }
+                    IconButton(onClick = { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }, modifier = Modifier.size(52.dp)) { Text("⚙", fontSize = 28.sp, color = onBg) }
                 }
                 TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("開いたファイル") })
@@ -261,42 +213,5 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        if (showSettings) {
-            AlertDialog(
-                onDismissRequest = { showSettings = false },
-                title = { Text("一覧の設定") },
-                text = {
-                    Column(
-                        Modifier.verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text("保存先: $storage", style = MaterialTheme.typography.bodySmall)
-                        Button(onClick = { treePicker.launch(null) }) { Text("保存フォルダを設定・変更") }
-                        OutlinedButton(onClick = {
-                            showSettings = false
-                            importPicker.launch(arrayOf("text/*"))
-                        }) { Text("txtファイルを取り込む") }
-                        HorizontalDivider()
-                        ColorPickerRow("一覧の背景色", listBg ?: 0x000000, BG_PRESETS) {
-                            listBg = it
-                            store.listBgColor = it
-                        }
-                        SliderRow("背景の透過度（255=不透明、初期値200）", listAlpha, 0, 255) {
-                            listAlpha = it
-                            store.listBgAlpha = it
-                        }
-                        TextButton(onClick = {
-                            listBg = null
-                            listAlpha = 200
-                            store.listBgColor = null
-                            store.listBgAlpha = 200
-                        }) { Text("テーマ既定に戻す") }
-                        Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
-                    }
-                },
-                confirmButton = { TextButton(onClick = { showSettings = false }) { Text("閉じる") } },
-            )
-        }
-        ConflictDialog(importer)
     }
 }

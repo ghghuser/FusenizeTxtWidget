@@ -7,6 +7,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Mutex
 
 class FusenApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        try {
+            com.ghghuser.fusenizetxt.data.Backup.schedule(this, replace = false)
+        } catch (e: Exception) {
+            // 定時バックアップの登録に失敗しても本体の動作には影響させない
+        }
+    }
+
     companion object {
         /** Activityが閉じても保存処理を最後まで走らせるためのスコープ */
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

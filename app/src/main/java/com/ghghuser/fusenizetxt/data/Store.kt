@@ -184,6 +184,45 @@ class Store(ctx: Context) {
         }
     }
 
+    // ---- 定時バックアップ ----
+    var backupEnabled: Boolean
+        get() = sp.getBoolean("bk_on", false)
+        set(v) {
+            sp.edit().putBoolean("bk_on", v).apply()
+        }
+
+    var backupHours: Int
+        get() = sp.getInt("bk_h", 24)
+        set(v) {
+            sp.edit().putInt("bk_h", v.coerceIn(1, 168)).apply()
+        }
+
+    /** 残す個数（1〜100）。古いものから自動で削除 */
+    var backupKeep: Int
+        get() = sp.getInt("bk_keep", 10).coerceIn(1, 100)
+        set(v) {
+            sp.edit().putInt("bk_keep", v.coerceIn(1, 100)).apply()
+        }
+
+    /** バックアップ先フォルダ（null = Documents/FusenizeTxtWidget-Backup） */
+    var backupTree: String?
+        get() = sp.getString("bk_tree", null)
+        set(v) {
+            if (v == null) sp.edit().remove("bk_tree").apply() else sp.edit().putString("bk_tree", v).apply()
+        }
+
+    var backupSig: String?
+        get() = sp.getString("bk_sig", null)
+        set(v) {
+            sp.edit().putString("bk_sig", v).apply()
+        }
+
+    var backupStatus: String
+        get() = sp.getString("bk_status", "") ?: ""
+        set(v) {
+            sp.edit().putString("bk_status", v).apply()
+        }
+
     // ---- 一覧画面の見た目 ----
     var sortMode: Int
         get() = sp.getInt("sort", SORT_UPDATED)

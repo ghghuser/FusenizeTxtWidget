@@ -21,6 +21,7 @@ object Importer {
         val failed: Int = 0,
         val cancelled: Boolean = false,
         val entries: List<MemoRepo.Entry> = emptyList(),
+        val pairs: List<Pair<Item, MemoRepo.Entry>> = emptyList(),
     ) {
         fun describe(verb: String): String {
             val sb = StringBuilder("${done}件を${verb}しました")
@@ -67,6 +68,7 @@ object Importer {
         var over = 0
         var failed = 0
         val entries = ArrayList<MemoRepo.Entry>()
+        val pairs = ArrayList<Pair<Item, MemoRepo.Entry>>()
 
         for ((i, item) in items.withIndex()) {
             val conflict = taken[item.name.lowercase()]
@@ -74,12 +76,13 @@ object Importer {
                 // すでに保存先にあるファイル自身。何も書かずにそのまま使う
                 done++
                 entries.add(conflict)
+                pairs.add(item to conflict)
                 continue
             }
             var mode = MemoRepo.OnConflict.RENAME
             if (conflict != null) {
                 val d = sticky ?: ask(item.name, items.size - i - 1)
-                    ?: return Summary(done, over, failed, true, entries)
+                    ?: return Summary(done, over, failed, true, entries, pairs)
                 if (d.applyAll) sticky = d
                 mode = d.mode
             }
@@ -93,6 +96,7 @@ object Importer {
             done++
             if (conflict != null && mode == MemoRepo.OnConflict.OVERWRITE) over++
             entries.add(e)
+            pairs.add(item to e)
             if (move && e.uri != item.uri) {
                 withContext(Dispatchers.IO) {
                     Store(ctx).replaceUri(item.uri.toString(), e.uri.toString())
@@ -100,7 +104,7 @@ object Importer {
                 }
             }
         }
-        return Summary(done, over, failed, false, entries)
+        return Summary(done, over, failed, false, entries, pairs)
     }
 
     /** 保存フォルダを設定した後、Documents/FusenizeTxtWidget にあったメモを新しい保存先へ移動する */
