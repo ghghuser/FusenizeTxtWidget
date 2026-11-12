@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 紙の質感: ごく薄い斜めグラデーション + 細かな繊維ノイズ（背景の上に重ねる） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:startColor="#1FFFFFFF"
+                android:endColor="#22000000" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    <item android:top="3dp" android:bottom="3dp" android:left="3dp" android:right="3dp">
+        <bitmap android:src="@drawable/paper_noise" android:tileMode="repeat" />
+    </item>
+</layer-list>

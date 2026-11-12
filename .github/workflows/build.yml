@@ -29,6 +29,18 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      # icon/icon.svg だけがある場合は、先にPNG(1024x1024)へ変換する（icon.png があればそちらを優先）
+      - name: Convert SVG icon to PNG
+        run: |
+          if [ -f icon/icon.svg ] && [ ! -f icon/icon.png ]; then
+            pip install --break-system-packages --quiet cairosvg 2>/dev/null || true
+            python3 -c "import cairosvg; cairosvg.svg2png(url='icon/icon.svg', write_to='icon/icon.png', output_width=1024, output_height=1024)" \
+              || { command -v rsvg-convert >/dev/null && rsvg-convert -w 1024 -h 1024 icon/icon.svg -o icon/icon.png; } \
+              || { command -v inkscape >/dev/null && inkscape icon/icon.svg -w 1024 -h 1024 -o icon/icon.png; } \
+              || echo "SVG conversion failed - using default icon"
+          fi
+          exit 0
+
       # icon/icon.png（正方形のPNG、1024x1024推奨）をリポジトリに置くと、アプリアイコンとして使われる
       - name: Apply custom launcher icon
         run: |

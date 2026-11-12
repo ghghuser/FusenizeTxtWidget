@@ -23,6 +23,13 @@
                 android:scaleType="fitXY"
                 android:src="@drawable/widget_note_bg" />
 
+            <ImageView
+                android:id="@+id/w_paper"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:src="@drawable/widget_note_paper" />
+
             <!-- 垂直配置は上下のスペーサーの表示/非表示で切り替える -->
             <LinearLayout
                 android:id="@+id/w_text_box"

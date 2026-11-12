@@ -84,6 +84,8 @@ object WidgetRender {
         // 背景色と透過度（形は角丸のdrawable、色はフィルタ、透過度はimageAlpha）
         rv.setInt(R.id.w_bg, "setColorFilter", rgbToArgb(s.bgColor))
         rv.setInt(R.id.w_bg, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
+        rv.setViewVisibility(R.id.w_paper, if (s.paper) android.view.View.VISIBLE else android.view.View.GONE)
+        rv.setInt(R.id.w_paper, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
 
         // 文字
         val tid = when (s.hAlign) {

@@ -50,9 +50,11 @@ fun StylePanel(
         if (!style.autoText) {
             ColorPickerRow("文字色", style.textColor, TEXT_PRESETS) { onChange(style.copy(textColor = it)) }
         }
-        SliderRow("文字サイズ (sp)", style.textSizeSp, 12, 32) { onChange(style.copy(textSizeSp = it)) }
+        SliderRow("ウィジェットの文字サイズ (sp)", style.textSizeSp, 12, 32) { onChange(style.copy(textSizeSp = it)) }
+        SliderRow("編集画面の文字サイズ (sp)", style.editSizeSp, 12, 32) { onChange(style.copy(editSizeSp = it)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = style.bold, onClick = { onChange(style.copy(bold = !style.bold)) }, label = { Text("太字") })
+            FilterChip(selected = style.paper, onClick = { onChange(style.copy(paper = !style.paper)) }, label = { Text("紙の質感") })
             FilterChip(selected = style.italic, onClick = { onChange(style.copy(italic = !style.italic)) }, label = { Text("斜体") })
         }
         HorizontalDivider()

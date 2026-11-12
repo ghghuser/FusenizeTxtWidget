@@ -44,6 +44,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,7 +58,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
@@ -554,6 +558,15 @@ class EditActivity : ComponentActivity() {
         val cs = MaterialTheme.colorScheme
 
         val editorBg = if (widgetMode) Color(rgbToArgb(shownStyle().bgColor)) else cs.surfaceVariant
+        // 設定・ツールバー部分の色は入力欄に近い色で、少し濃いめにする
+        val panelBg = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.18f)
+        val panelDark = panelBg.luminance() < 0.5f
+        val panelFg = if (panelDark) Color(0xFFF2F2F2) else Color(0xFF212121)
+        val panelScheme = (if (panelDark) darkColorScheme() else lightColorScheme()).copy(
+            surface = panelBg, background = panelBg, onSurface = panelFg, onBackground = panelFg,
+            onSurfaceVariant = panelFg.copy(alpha = 0.8f), surfaceVariant = panelBg,
+            primary = if (panelDark) Color(0xFF9FC2FF) else Color(0xFF1F5FBF),
+        )
         val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else cs.onSurfaceVariant
 
         LaunchedEffect(loaded) {
@@ -598,12 +611,15 @@ class EditActivity : ComponentActivity() {
                 .background(Color.Black.copy(alpha = 0.45f))
                 .systemBarsPadding()
                 .imePadding()
-                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { closeAndSave() },
+                // clickable だと Enter キーのイベントが「タップ」扱いで閉じてしまうため、ポインタ入力のみで判定する
+                .pointerInput(Unit) { detectTapGestures { closeAndSave() } },
             contentAlignment = Alignment.Center,
         ) {
+            MaterialTheme(colorScheme = panelScheme) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = cs.surface,
+                color = panelBg,
+                contentColor = panelFg,
                 modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.86f)
                     .pointerInput(Unit) { detectTapGestures { } },
             ) {
@@ -682,6 +698,12 @@ class EditActivity : ComponentActivity() {
                         Modifier.weight(1f).fillMaxWidth()
                             .padding(top = 6.dp)
                             .background(editorBg, RoundedCornerShape(8.dp))
+                            .then(
+                                if (widgetMode && style.paper) Modifier.background(
+                                    Brush.linearGradient(listOf(Color.White.copy(alpha = 0.12f), Color.Black.copy(alpha = 0.13f))),
+                                    RoundedCornerShape(8.dp),
+                                ) else Modifier
+                            )
                             .padding(10.dp)
                     ) {
                         if (loaded) {
@@ -690,7 +712,7 @@ class EditActivity : ComponentActivity() {
                                 onValueChange = { applyText(it) },
                                 textStyle = TextStyle(
                                     color = editorFg,
-                                    fontSize = (if (widgetMode) style.textSizeSp else 16).sp,
+                                    fontSize = (if (widgetMode) style.editSizeSp else 16).sp,
                                     fontWeight = if (widgetMode && style.bold) FontWeight.Bold else FontWeight.Normal,
                                     fontStyle = if (widgetMode && style.italic) FontStyle.Italic else FontStyle.Normal,
                                     textAlign = if (!widgetMode) TextAlign.Start else when (style.hAlign) {
@@ -724,6 +746,7 @@ class EditActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
             }
         }
 

@@ -81,6 +81,12 @@ class MainActivity : ComponentActivity() {
     private val dateFmt = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent { FusenTheme { MainScreen() } }
+    }
+
     private fun openEditor(uri: Uri) {
         startActivity(Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()))
     }
