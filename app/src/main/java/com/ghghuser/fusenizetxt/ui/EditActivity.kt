@@ -708,13 +708,25 @@ class EditActivity : ComponentActivity() {
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleSmall,
                         )
+                        if (keepOn) {
+                            // 点灯したままの間は🔆を表示。タップで解除
+                            IconButton(onClick = {
+                                applyKeepOn(false)
+                                Toast.makeText(this@EditActivity, "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
+                            }, modifier = Modifier.size(40.dp)) { Text("🔆") }
+                        }
                         Box {
                             IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) { Text("⋮") }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(text = { Text((if (keepOn) "🔆 " else "🌙 ") + "画面を点灯したままにする") }, onClick = {
+                                DropdownMenuItem(text = { Text((if (keepOn) "🌙 画面を自動消灯に戻す" else "🔆 画面を点灯したままにする")) }, onClick = {
                                     menuOpen = false
                                     applyKeepOn(!keepOn)
                                     Toast.makeText(this@EditActivity, if (keepOn) "編集中は画面を消さないようにしました" else "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
+                                })
+                                DropdownMenuItem(text = { Text("📋 一覧を開く") }, onClick = {
+                                    menuOpen = false
+                                    closeAndSave()
+                                    startActivity(Intent(this@EditActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                                 })
                                 if (widgetMode) {
                                     DropdownMenuItem(text = { Text(if (showSettings) "⚙ 設定を閉じる" else "⚙ ウィジェットの設定") }, onClick = {
@@ -797,6 +809,8 @@ class EditActivity : ComponentActivity() {
                                         color = editorFg,
                                         fontSize = (if (widgetMode) style.editSizeSp else 16).sp,
                                         fontWeight = if (widgetMode && style.bold) FontWeight.Bold else FontWeight.Normal,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                                        fontSynthesis = androidx.compose.ui.text.font.FontSynthesis.All,
                                         fontStyle = if (widgetMode && style.italic) FontStyle.Italic else FontStyle.Normal,
                                         textAlign = if (!widgetMode) TextAlign.Start else when (style.hAlign) {
                                             1 -> TextAlign.Center
