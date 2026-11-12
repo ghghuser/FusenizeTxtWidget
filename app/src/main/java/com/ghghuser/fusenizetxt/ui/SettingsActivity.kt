@@ -301,6 +301,11 @@ class SettingsActivity : ComponentActivity() {
                     listBg = it
                     store.listBgColor = it
                 }
+                var appPaper by remember { mutableIntStateOf(store.appPaper) }
+                SliderRow("紙の質感の強さ（一覧・編集欄。0でなし）", appPaper, 0, 100) {
+                    appPaper = it
+                    store.appPaper = it
+                }
                 SliderRow("背景の透過度（255=不透明、初期値200）", listAlpha, 0, 255) {
                     listAlpha = it
                     store.listBgAlpha = it

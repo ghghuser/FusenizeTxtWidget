@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
         var listBg by remember { mutableStateOf(store.listBgColor) }
         var listAlpha by remember { mutableIntStateOf(store.listBgAlpha) }
         var storage by remember { mutableStateOf(MemoRepo.storageLabel(this)) }
+        var paper by remember { mutableIntStateOf(store.appPaper) }
 
         val owner = LocalLifecycleOwner.current
         DisposableEffect(owner) {
@@ -132,6 +133,7 @@ class MainActivity : ComponentActivity() {
                     storage = MemoRepo.storageLabel(this@MainActivity)
                     listBg = store.listBgColor
                     listAlpha = store.listBgAlpha
+                    paper = store.appPaper
                     tick++
                 }
             }
@@ -159,7 +161,7 @@ class MainActivity : ComponentActivity() {
         MaterialTheme(colorScheme = cs) {
         Scaffold(
             containerColor = Color.Transparent,
-            modifier = Modifier.fillMaxSize().background(bg),
+            modifier = Modifier.fillMaxSize().background(bg).paperTexture(paper * listAlpha / 255),
             floatingActionButton = {
                 FloatingActionButton(onClick = {
                     lifecycleScope.launch {

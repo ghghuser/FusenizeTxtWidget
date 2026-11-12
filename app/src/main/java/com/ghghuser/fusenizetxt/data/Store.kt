@@ -288,4 +288,11 @@ class Store(ctx: Context) {
         set(v) {
             sp.edit().putString("storageNote", v.take(400)).apply()
         }
+
+    /** アプリ側（一覧・編集欄）の紙の質感の強さ 0〜100（0でなし） */
+    var appPaper: Int
+        get() = sp.getInt("appPaper", 70)
+        set(v) {
+            sp.edit().putInt("appPaper", v.coerceIn(0, 100)).apply()
+        }
 }

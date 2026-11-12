@@ -732,12 +732,7 @@ class EditActivity : ComponentActivity() {
                         Modifier.weight(1f).fillMaxWidth()
                             .padding(top = 6.dp)
                             .background(editorBg, RoundedCornerShape(8.dp))
-                            .then(
-                                if (widgetMode && style.paper) Modifier.background(
-                                    Brush.linearGradient(listOf(Color.White.copy(alpha = 0.17f * style.paperStrength / 100f), Color.Black.copy(alpha = 0.18f * style.paperStrength / 100f))),
-                                    RoundedCornerShape(8.dp),
-                                ) else Modifier
-                            )
+                            .paperTexture(if (widgetMode) (if (style.paper) style.paperStrength else 0) else store.appPaper, RoundedCornerShape(8.dp))
                             .padding(10.dp)
                     ) {
                         if (loaded) {

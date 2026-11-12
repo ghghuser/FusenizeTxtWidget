@@ -213,8 +213,33 @@ object MemoRepo {
         var first = text.lineSequence().firstOrNull() ?: ""
         first = first.trim().trimStart('☐', '☑').trim()
         first = first.replace(badChars, " ").replace(Regex("\\s+"), " ").trim()
-        first = first.take(40).trim().trimEnd('.')
-        return first.ifEmpty { "無題" }
+        first = first.trim().trimEnd('.')
+        return ellipsize(first, MAX_TITLE_WIDTH).ifEmpty { "無題" }
+    }
+
+    /** 自動命名の長さの上限。全角=2、半角=1 として数え、全角24文字（半角48文字）まで */
+    private const val MAX_TITLE_WIDTH = 48
+
+    private fun cpWidth(cp: Int): Int = if (cp < 0x80 || cp in 0xFF61..0xFF9F) 1 else 2
+
+    /** 幅の上限を超える場合は、収まる位置で切って末尾に「…」を付ける */
+    fun ellipsize(s: String, maxWidth: Int): String {
+        var total = 0
+        s.codePoints().forEach { total += cpWidth(it) }
+        if (total <= maxWidth) return s
+        val limit = maxWidth - 2 // 「…」は全角幅
+        val sb = StringBuilder()
+        var w = 0
+        var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            val cw = cpWidth(cp)
+            if (w + cw > limit) break
+            sb.appendCodePoint(cp)
+            w += cw
+            i += Character.charCount(cp)
+        }
+        return sb.toString().trimEnd().trimEnd('.') + "…"
     }
 
     fun sanitizeBase(s: String): String {
