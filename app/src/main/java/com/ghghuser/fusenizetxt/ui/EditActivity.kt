@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.imePadding
@@ -488,6 +491,20 @@ class EditActivity : ComponentActivity() {
         applyText(TextFieldValue(nt, TextRange((cur + delta).coerceIn(ls, nt.length))))
     }
 
+    /** タップ後のカーソルが行頭の ☐/☑ の位置なら、チェックとオフを切り替える */
+    private fun tapToggleCheckbox() {
+        val v = text
+        if (!v.selection.collapsed) return
+        val s = v.text
+        val cur = v.selection.start.coerceIn(0, s.length)
+        val ls = (if (cur == 0) -1 else s.lastIndexOf('\n', cur - 1)) + 1
+        if (ls >= s.length || cur > ls + 1) return
+        val mark = s[ls]
+        if (mark != '☐' && mark != '☑') return
+        val nt = s.substring(0, ls) + (if (mark == '☐') '☑' else '☐') + s.substring(ls + 1)
+        applyText(TextFieldValue(nt, v.selection))
+    }
+
     private fun applyKeepOn(on: Boolean) {
         keepOn = on
         if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -694,7 +711,7 @@ class EditActivity : ComponentActivity() {
                         Box {
                             IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) { Text("⋮") }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(text = { Text((if (keepOn) "✓ " else "　") + "画面を点灯したままにする") }, onClick = {
+                                DropdownMenuItem(text = { Text((if (keepOn) "🔆 " else "🌙 ") + "画面を点灯したままにする") }, onClick = {
                                     menuOpen = false
                                     applyKeepOn(!keepOn)
                                     Toast.makeText(this@EditActivity, if (keepOn) "編集中は画面を消さないようにしました" else "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
@@ -762,7 +779,8 @@ class EditActivity : ComponentActivity() {
                     HorizontalDivider()
                     // 本文
                     Box(
-                        Modifier.weight(1f).fillMaxWidth()
+                        (if (showSettings && widgetMode) Modifier.fillMaxWidth().height(((if (widgetMode) style.editSizeSp else 16) * 1.5f * 5 + 28).dp)
+                        else Modifier.weight(1f).fillMaxWidth())
                             .padding(top = 6.dp)
                             .background(editorBg, RoundedCornerShape(8.dp))
                             .paperTexture(if (widgetMode) (if (style.paper) style.paperStrength else 0) else store.appPaper, RoundedCornerShape(8.dp))
@@ -787,7 +805,21 @@ class EditActivity : ComponentActivity() {
                                         },
                                     ),
                                     cursorBrush = SolidColor(editorFg),
-                                    modifier = m.focusRequester(focus),
+                                    modifier = m.focusRequester(focus).pointerInput(Unit) {
+                                        // チェックボックス(☐/☑)をタップしたら、チェックとオフを切り替える
+                                        while (true) {
+                                            val tapped = awaitPointerEventScope {
+                                                val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                                val up = waitForUpOrCancellation(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                                up != null && (up.position - down.position).getDistance() < viewConfiguration.touchSlop &&
+                                                    up.uptimeMillis - down.uptimeMillis < 300
+                                            }
+                                            if (tapped) {
+                                                delay(60) // 文字入力欄がカーソルを動かすのを待つ
+                                                tapToggleCheckbox()
+                                            }
+                                        }
+                                    },
                                 )
                             }
                             if (lineNumbers) {
@@ -828,7 +860,7 @@ class EditActivity : ComponentActivity() {
                     // 設定パネル
                     if (showSettings && widgetMode) {
                         Column(
-                            Modifier.fillMaxWidth().heightIn(max = 300.dp)
+                            Modifier.fillMaxWidth().weight(1f)
                                 .padding(top = 6.dp).verticalScroll(rememberScrollState())
                         ) {
                             StylePanel(
