@@ -176,8 +176,8 @@ class SettingsActivity : ComponentActivity() {
         MaterialTheme(colorScheme = scheme) {
         Surface(Modifier.fillMaxSize(), color = scheme.background) {
             Column(
-                Modifier.systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                Modifier.systemBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { finish() }) { Text("← 戻る") }
@@ -220,6 +220,56 @@ class SettingsActivity : ComponentActivity() {
                 }
                 HorizontalDivider()
 
+                Text("一覧の見た目", style = MaterialTheme.typography.titleMedium)
+                ColorPickerRow("一覧の背景色", listBg ?: 0x000000, BG_PRESETS) {
+                    listBg = it
+                    store.listBgColor = it
+                }
+                var appPaper by remember { mutableIntStateOf(store.appPaper) }
+                SliderRow("紙の質感の強さ（一覧・編集欄。0でなし）", appPaper, 0, 100) {
+                    appPaper = it
+                    store.appPaper = it
+                }
+                SliderRow("背景の透過度（255=不透明、初期値200）", listAlpha, 0, 255) {
+                    listAlpha = it
+                    store.listBgAlpha = it
+                }
+                TextButton(onClick = {
+                    listBg = null
+                    listAlpha = 200
+                    store.listBgColor = null
+                    store.listBgAlpha = 200
+                }) { Text("テーマ既定に戻す") }
+                HorizontalDivider()
+                Text("画面の明るさ", style = MaterialTheme.typography.titleMedium)
+                var edBg by remember { mutableStateOf(store.editorBgColor) }
+                ColorPickerRow("アプリで開いたときの編集欄の色", edBg ?: (listBg ?: 0xF0F0F0), BG_PRESETS) {
+                    edBg = it
+                    store.editorBgColor = it
+                }
+                TextButton(onClick = {
+                    edBg = null
+                    store.editorBgColor = null
+                }) { Text("編集欄の色を既定に戻す") }
+                var brOn by remember { mutableStateOf(store.brightnessLock) }
+                var brLv by remember { mutableIntStateOf(store.brightnessLevel) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("アプリ画面を指定の明るさに固定", Modifier.weight(1f))
+                    Switch(checked = brOn, onCheckedChange = {
+                        brOn = it
+                        store.brightnessLock = it
+                        com.ghghuser.fusenizetxt.data.Brightness.apply(this@SettingsActivity)
+                    })
+                }
+                if (brOn) {
+                    SliderRow("明るさ（%）", brLv, 5, 100) {
+                        brLv = it
+                        store.brightnessLevel = it
+                        com.ghghuser.fusenizetxt.data.Brightness.apply(this@SettingsActivity)
+                    }
+                    Text("このアプリを開いている間だけ有効です（端末全体の設定は変えません）。", style = MaterialTheme.typography.labelSmall)
+                }
+                HorizontalDivider()
                 Text("zipバックアップ", style = MaterialTheme.typography.titleMedium)
                 OutlinedButton(
                     onClick = {
@@ -296,56 +346,6 @@ class SettingsActivity : ComponentActivity() {
                 }
                 HorizontalDivider()
 
-                Text("一覧の見た目", style = MaterialTheme.typography.titleMedium)
-                ColorPickerRow("一覧の背景色", listBg ?: 0x000000, BG_PRESETS) {
-                    listBg = it
-                    store.listBgColor = it
-                }
-                var appPaper by remember { mutableIntStateOf(store.appPaper) }
-                SliderRow("紙の質感の強さ（一覧・編集欄。0でなし）", appPaper, 0, 100) {
-                    appPaper = it
-                    store.appPaper = it
-                }
-                SliderRow("背景の透過度（255=不透明、初期値200）", listAlpha, 0, 255) {
-                    listAlpha = it
-                    store.listBgAlpha = it
-                }
-                TextButton(onClick = {
-                    listBg = null
-                    listAlpha = 200
-                    store.listBgColor = null
-                    store.listBgAlpha = 200
-                }) { Text("テーマ既定に戻す") }
-                Text("画面の明るさ", style = MaterialTheme.typography.titleMedium)
-                var brOn by remember { mutableStateOf(store.brightnessLock) }
-                var brLv by remember { mutableIntStateOf(store.brightnessLevel) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("アプリ画面を指定の明るさに固定", Modifier.weight(1f))
-                    Switch(checked = brOn, onCheckedChange = {
-                        brOn = it
-                        store.brightnessLock = it
-                        com.ghghuser.fusenizetxt.data.Brightness.apply(this@SettingsActivity)
-                    })
-                }
-                if (brOn) {
-                    SliderRow("明るさ（%）", brLv, 5, 100) {
-                        brLv = it
-                        store.brightnessLevel = it
-                        com.ghghuser.fusenizetxt.data.Brightness.apply(this@SettingsActivity)
-                    }
-                    Text("このアプリを開いている間だけ有効です（端末全体の設定は変えません）。", style = MaterialTheme.typography.labelSmall)
-                }
-                HorizontalDivider()
-                var edBg by remember { mutableStateOf(store.editorBgColor) }
-                ColorPickerRow("アプリで開いたときの編集欄の色", edBg ?: (listBg ?: 0xF0F0F0), BG_PRESETS) {
-                    edBg = it
-                    store.editorBgColor = it
-                }
-                TextButton(onClick = {
-                    edBg = null
-                    store.editorBgColor = null
-                }) { Text("編集欄の色を既定に戻す") }
-                HorizontalDivider()
                 Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
             }
         }

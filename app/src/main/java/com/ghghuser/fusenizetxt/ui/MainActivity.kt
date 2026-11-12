@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -175,26 +176,26 @@ class MainActivity : ComponentActivity() {
             Column(Modifier.padding(pad).fillMaxSize()) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("FusenizeTxt", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleLarge, color = onBg)
+                    var sortMenu by remember { mutableStateOf(false) }
+                    val sortLabels = listOf(Store.SORT_UPDATED to "更新日時", Store.SORT_CREATED to "作成日時", Store.SORT_NAME to "名前")
+                    Box {
+                        OutlinedButton(onClick = { sortMenu = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) {
+                            Text((sortLabels.firstOrNull { it.first == sort }?.second ?: "更新日時") + " ▼", color = onBg, style = MaterialTheme.typography.labelMedium)
+                        }
+                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                            sortLabels.forEach { (m, l) ->
+                                DropdownMenuItem(
+                                    text = { Text((if (sort == m) "✓ " else "　") + l) },
+                                    onClick = { sort = m; store.sortMode = m; sortMenu = false },
+                                )
+                            }
+                        }
+                    }
                     IconButton(onClick = { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }, modifier = Modifier.size(52.dp)) { Text("⚙", fontSize = 28.sp, color = onBg) }
                 }
                 TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = onBg) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("開いたファイル") })
                     Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("フォルダ内") })
-                }
-                var sortMenu by remember { mutableStateOf(false) }
-                val sortLabels = listOf(Store.SORT_UPDATED to "更新日時", Store.SORT_CREATED to "作成日時", Store.SORT_NAME to "名前")
-                Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    OutlinedButton(onClick = { sortMenu = true }) {
-                        Text("並び順: " + (sortLabels.firstOrNull { it.first == sort }?.second ?: "更新日時") + " ▼", color = onBg)
-                    }
-                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                        sortLabels.forEach { (m, l) ->
-                            DropdownMenuItem(
-                                text = { Text((if (sort == m) "✓ " else "　") + l) },
-                                onClick = { sort = m; store.sortMode = m; sortMenu = false },
-                            )
-                        }
-                    }
                 }
                 if (tab == 1) {
                     Text(
@@ -224,7 +225,7 @@ class MainActivity : ComponentActivity() {
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(sorted, key = { it.uri.toString() }) { r ->
                             Row(
-                                Modifier.fillMaxWidth().clickable { openEditor(r.uri) }.padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+                                Modifier.fillMaxWidth().clickable { openEditor(r.uri) }.padding(start = 16.dp, top = 3.dp, bottom = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(Modifier.weight(1f)) {

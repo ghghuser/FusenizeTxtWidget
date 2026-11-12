@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -471,14 +473,19 @@ class EditActivity : ComponentActivity() {
         var delta = 0
         when {
             line.startsWith("☐") -> newLine = "☑" + line.drop(1)
-            line.startsWith("☑") -> newLine = "☐" + line.drop(1)
+            line.startsWith("☑") -> {
+                // 3段目: チェックボックスを削除する
+                val rest = line.drop(1)
+                newLine = if (rest.startsWith(" ")) rest.drop(1) else rest
+                delta = newLine.length - line.length
+            }
             else -> {
                 newLine = "☐ $line"
                 delta = 2
             }
         }
         val nt = s.substring(0, ls) + newLine + s.substring(le)
-        applyText(TextFieldValue(nt, TextRange((cur + delta).coerceIn(0, nt.length))))
+        applyText(TextFieldValue(nt, TextRange((cur + delta).coerceIn(ls, nt.length))))
     }
 
     private fun applyKeepOn(on: Boolean) {
@@ -577,6 +584,10 @@ class EditActivity : ComponentActivity() {
     @Composable
     private fun EditScreen() {
         var showSettings by remember { mutableStateOf(false) }
+        var lineNumbers by remember { mutableStateOf(store.lineNumbers) }
+        var tl by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+        val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+        val fm = androidx.compose.ui.platform.LocalFocusManager.current
         var menuOpen by remember { mutableStateOf(false) }
         var dlg by remember { mutableStateOf(Dlg.NONE) }
         var renameText by remember { mutableStateOf("") }
@@ -630,7 +641,24 @@ class EditActivity : ComponentActivity() {
             }
         }
 
-        BackHandler { closeAndSave() }
+        // 設定を開いている間はキーボードを出さない（閉じたら入力欄へ戻る）
+        LaunchedEffect(showSettings) {
+            if (showSettings) {
+                fm.clearFocus()
+                kb?.hide()
+            } else if (loaded) {
+                delay(100)
+                try {
+                    focus.requestFocus()
+                } catch (e: Exception) {
+                }
+            }
+        }
+
+        // 設定が開いていれば、戻る操作でまず設定を閉じる
+        BackHandler {
+            if (showSettings) showSettings = false else closeAndSave()
+        }
 
         Box(
             Modifier.fillMaxSize()
@@ -663,15 +691,20 @@ class EditActivity : ComponentActivity() {
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleSmall,
                         )
-                        IconButton(onClick = { applyKeepOn(!keepOn) }, modifier = Modifier.size(40.dp)) {
-                            Text(
-                                if (keepOn) "☀" else "☾",
-                                color = if (keepOn) cs.primary else cs.onSurfaceVariant,
-                            )
-                        }
                         Box {
                             IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) { Text("⋮") }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(text = { Text((if (keepOn) "✓ " else "　") + "画面を点灯したままにする") }, onClick = {
+                                    menuOpen = false
+                                    applyKeepOn(!keepOn)
+                                    Toast.makeText(this@EditActivity, if (keepOn) "編集中は画面を消さないようにしました" else "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
+                                })
+                                if (widgetMode) {
+                                    DropdownMenuItem(text = { Text(if (showSettings) "⚙ 設定を閉じる" else "⚙ ウィジェットの設定") }, onClick = {
+                                        menuOpen = false
+                                        showSettings = !showSettings
+                                    })
+                                }
                                 DropdownMenuItem(text = { Text("ファイル名を変更") }, onClick = {
                                     menuOpen = false
                                     renameText = fileName.removeSuffix(".txt")
@@ -712,19 +745,19 @@ class EditActivity : ComponentActivity() {
                                 })
                             }
                         }
-                        IconButton(onClick = { closeAndSave() }, modifier = Modifier.size(40.dp)) { Text("✓") }
                     }
-                    // 2段目: ツールバー
-                    Row(Modifier.horizontalScroll(rememberScrollState())) {
-                        TextButton(onClick = { doUndo() }, enabled = undoMgr.canUndo) { Text("↺ 戻す") }
-                        TextButton(onClick = { doRedo() }, enabled = undoMgr.canRedo) { Text("↻ やり直し") }
-                        TextButton(onClick = { toggleCheckbox() }) { Text("☑ チェック") }
-                        if (widgetMode) {
-                            TextButton(onClick = { showSettings = !showSettings }) {
-                                Text("⚙", fontSize = 24.sp)
-                                Text(if (showSettings) " 設定を閉じる" else " 設定")
-                            }
+                    // 2段目: ツールバー（右端に閉じる）
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+                            TextButton(onClick = { doUndo() }, enabled = undoMgr.canUndo) { Text("↺ 戻す") }
+                            TextButton(onClick = { doRedo() }, enabled = undoMgr.canRedo) { Text("↻ やり直し") }
+                            TextButton(onClick = { toggleCheckbox() }) { Text("☑ チェック") }
+                            TextButton(onClick = {
+                                lineNumbers = !lineNumbers
+                                store.lineNumbers = lineNumbers
+                            }) { Text("# 行番号", color = if (lineNumbers) cs.primary else Color.Unspecified) }
                         }
+                        IconButton(onClick = { closeAndSave() }, modifier = Modifier.size(40.dp)) { Text("✓") }
                     }
                     HorizontalDivider()
                     // 本文
@@ -736,23 +769,58 @@ class EditActivity : ComponentActivity() {
                             .padding(10.dp)
                     ) {
                         if (loaded) {
-                            BasicTextField(
-                                value = text,
-                                onValueChange = { applyText(it) },
-                                textStyle = TextStyle(
-                                    color = editorFg,
-                                    fontSize = (if (widgetMode) style.editSizeSp else 16).sp,
-                                    fontWeight = if (widgetMode && style.bold) FontWeight.Bold else FontWeight.Normal,
-                                    fontStyle = if (widgetMode && style.italic) FontStyle.Italic else FontStyle.Normal,
-                                    textAlign = if (!widgetMode) TextAlign.Start else when (style.hAlign) {
-                                        1 -> TextAlign.Center
-                                        2 -> TextAlign.End
-                                        else -> TextAlign.Start
-                                    },
-                                ),
-                                cursorBrush = SolidColor(editorFg),
-                                modifier = Modifier.fillMaxSize().focusRequester(focus),
-                            )
+                            val tf: @Composable (Modifier) -> Unit = { m ->
+                                BasicTextField(
+                                    value = text,
+                                    onValueChange = { applyText(it) },
+                                    enabled = !showSettings,
+                                    onTextLayout = { tl = it },
+                                    textStyle = TextStyle(
+                                        color = editorFg,
+                                        fontSize = (if (widgetMode) style.editSizeSp else 16).sp,
+                                        fontWeight = if (widgetMode && style.bold) FontWeight.Bold else FontWeight.Normal,
+                                        fontStyle = if (widgetMode && style.italic) FontStyle.Italic else FontStyle.Normal,
+                                        textAlign = if (!widgetMode) TextAlign.Start else when (style.hAlign) {
+                                            1 -> TextAlign.Center
+                                            2 -> TextAlign.End
+                                            else -> TextAlign.Start
+                                        },
+                                    ),
+                                    cursorBrush = SolidColor(editorFg),
+                                    modifier = m.focusRequester(focus),
+                                )
+                            }
+                            if (lineNumbers) {
+                                Row(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                                    Box(Modifier.width(34.dp)) {
+                                        val lay = tl
+                                        val str = text.text
+                                        if (lay != null) {
+                                            val starts = ArrayList<Int>()
+                                            starts.add(0)
+                                            for (i in str.indices) if (str[i] == '\n') starts.add(i + 1)
+                                            if (starts.size <= 3000) {
+                                                starts.forEachIndexed { idx, st ->
+                                                    val ln = lay.getLineForOffset(st.coerceAtMost(str.length))
+                                                    val top = lay.getLineTop(ln)
+                                                    Text(
+                                                        "${idx + 1}",
+                                                        modifier = Modifier.width(28.dp).offset { androidx.compose.ui.unit.IntOffset(0, top.toInt()) },
+                                                        textAlign = TextAlign.End,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        color = editorFg.copy(alpha = 0.45f),
+                                                        fontSize = (if (widgetMode) style.editSizeSp else 16).sp,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    tf(Modifier.weight(1f).heightIn(min = 420.dp))
+                                }
+                            } else {
+                                tf(Modifier.fillMaxSize())
+                            }
                         } else {
                             Text("読み込み中…", color = editorFg)
                         }

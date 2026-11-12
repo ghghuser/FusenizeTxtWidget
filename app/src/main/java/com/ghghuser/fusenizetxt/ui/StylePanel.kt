@@ -27,8 +27,8 @@ fun StylePanel(
     onChange: (WidgetStyle) -> Unit,
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         if (pageNo + 1 < MAX_PAGES) {
             SliderRow("ページ数（2以上で最下段にページ切替）", pageCount, pageNo + 1, MAX_PAGES) { onPageCount(it) }

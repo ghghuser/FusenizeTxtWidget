@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +43,7 @@ fun SliderRow(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> 
             value = value.toFloat().coerceIn(min.toFloat(), max.toFloat()),
             onValueChange = { onChange(it.roundToInt()) },
             valueRange = min.toFloat()..max.toFloat(),
+            modifier = Modifier.height(30.dp),
         )
     }
 }

@@ -295,4 +295,11 @@ class Store(ctx: Context) {
         set(v) {
             sp.edit().putInt("appPaper", v.coerceIn(0, 100)).apply()
         }
+
+    /** 編集画面で行番号を表示するか */
+    var lineNumbers: Boolean
+        get() = sp.getBoolean("lineNo", false)
+        set(v) {
+            sp.edit().putBoolean("lineNo", v).apply()
+        }
 }
