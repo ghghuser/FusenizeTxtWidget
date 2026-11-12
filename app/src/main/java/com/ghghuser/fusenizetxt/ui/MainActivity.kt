@@ -28,7 +28,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
@@ -146,10 +147,11 @@ class MainActivity : ComponentActivity() {
             base.sortedByDescending { it.fav } // sortedBy は安定ソート → お気に入りが最上段
         }
 
-        val cs = MaterialTheme.colorScheme
+        val cs = listBg?.let { tintedScheme(Color(rgbToArgb(it))) } ?: MaterialTheme.colorScheme
         val bg = listBg?.let { Color(rgbToArgb(it, listAlpha)) } ?: cs.background.copy(alpha = listAlpha / 255f)
         val onBg = if (listBg == null) cs.onBackground else cs.onSurface
 
+        MaterialTheme(colorScheme = cs) {
         Scaffold(
             containerColor = Color.Transparent,
             modifier = Modifier.fillMaxSize().background(bg),
@@ -168,13 +170,23 @@ class MainActivity : ComponentActivity() {
                     Text("FusenizeTxt", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleLarge, color = onBg)
                     IconButton(onClick = { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }, modifier = Modifier.size(52.dp)) { Text("⚙", fontSize = 28.sp, color = onBg) }
                 }
-                TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
+                TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = onBg) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("開いたファイル") })
                     Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("フォルダ内") })
                 }
-                Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("更新日時" to Store.SORT_UPDATED, "作成日時" to Store.SORT_CREATED, "名前" to Store.SORT_NAME).forEach { (l, m) ->
-                        FilterChip(selected = sort == m, onClick = { sort = m; store.sortMode = m }, label = { Text(l) })
+                var sortMenu by remember { mutableStateOf(false) }
+                val sortLabels = listOf(Store.SORT_UPDATED to "更新日時", Store.SORT_CREATED to "作成日時", Store.SORT_NAME to "名前")
+                Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    OutlinedButton(onClick = { sortMenu = true }) {
+                        Text("並び順: " + (sortLabels.firstOrNull { it.first == sort }?.second ?: "更新日時") + " ▼", color = onBg)
+                    }
+                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                        sortLabels.forEach { (m, l) ->
+                            DropdownMenuItem(
+                                text = { Text((if (sort == m) "✓ " else "　") + l) },
+                                onClick = { sort = m; store.sortMode = m; sortMenu = false },
+                            )
+                        }
                     }
                 }
                 if (tab == 1) {
@@ -218,6 +230,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
+        }
     }
 }

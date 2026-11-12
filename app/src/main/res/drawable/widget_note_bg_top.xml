@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ページ切替タブがある時のメモ背景（下は角を付けずタブとつなぐ） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFFFFFFF" />
+    <corners android:topLeftRadius="8dp" android:topRightRadius="8dp" android:bottomRightRadius="0dp" android:bottomLeftRadius="0dp" />
+</shape>

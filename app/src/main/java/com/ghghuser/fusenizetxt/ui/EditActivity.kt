@@ -82,6 +82,7 @@ import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
 import com.ghghuser.fusenizetxt.data.WidgetStyle
 import com.ghghuser.fusenizetxt.data.rgbToArgb
+import com.ghghuser.fusenizetxt.data.contrastTextRgb
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -557,17 +558,14 @@ class EditActivity : ComponentActivity() {
         val focus = remember { FocusRequester() }
         val cs = MaterialTheme.colorScheme
 
-        val editorBg = if (widgetMode) Color(rgbToArgb(shownStyle().bgColor)) else cs.surfaceVariant
+        val appEd = remember { store.editorBgColor ?: store.listBgColor }
+        val editorBg = if (widgetMode) Color(rgbToArgb(shownStyle().bgColor)) else appEd?.let { Color(rgbToArgb(it)) } ?: cs.surfaceVariant
         // 設定・ツールバー部分の色は入力欄に近い色で、少し濃いめにする
         val panelBg = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.18f)
         val panelDark = panelBg.luminance() < 0.5f
         val panelFg = if (panelDark) Color(0xFFF2F2F2) else Color(0xFF212121)
-        val panelScheme = (if (panelDark) darkColorScheme() else lightColorScheme()).copy(
-            surface = panelBg, background = panelBg, onSurface = panelFg, onBackground = panelFg,
-            onSurfaceVariant = panelFg.copy(alpha = 0.8f), surfaceVariant = panelBg,
-            primary = if (panelDark) Color(0xFF9FC2FF) else Color(0xFF1F5FBF),
-        )
-        val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else cs.onSurfaceVariant
+        val panelScheme = tintedScheme(panelBg)
+        val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else if (appEd != null) Color(rgbToArgb(contrastTextRgb(appEd))) else cs.onSurfaceVariant
 
         LaunchedEffect(loaded) {
             if (loaded) {

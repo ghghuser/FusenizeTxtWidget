@@ -37,6 +37,8 @@ object WidgetRender {
     const val EXTRA_TO = "w_to"
 
     private val TAB_IDS = intArrayOf(R.id.w_tab0, R.id.w_tab1, R.id.w_tab2, R.id.w_tab3, R.id.w_tab4)
+    private val TABT_IDS = intArrayOf(R.id.w_tabt0, R.id.w_tabt1, R.id.w_tabt2, R.id.w_tabt3, R.id.w_tabt4)
+    private val TABB_IDS = intArrayOf(R.id.w_tabb0, R.id.w_tabb1, R.id.w_tabb2, R.id.w_tabb3, R.id.w_tabb4)
 
     fun updateAll(ctx: Context) {
         val app = ctx.applicationContext
@@ -84,6 +86,9 @@ object WidgetRender {
         // 背景色と透過度（形は角丸のdrawable、色はフィルタ、透過度はimageAlpha）
         rv.setInt(R.id.w_bg, "setColorFilter", rgbToArgb(s.bgColor))
         rv.setInt(R.id.w_bg, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
+        val hasTabs = cfg.pages.size > 1
+        rv.setImageViewResource(R.id.w_bg, if (hasTabs) R.drawable.widget_note_bg_top else R.drawable.widget_note_bg)
+        rv.setImageViewResource(R.id.w_paper, if (hasTabs) R.drawable.widget_note_paper_top else R.drawable.widget_note_paper)
         rv.setViewVisibility(R.id.w_paper, if (s.paper) android.view.View.VISIBLE else android.view.View.GONE)
         rv.setInt(R.id.w_paper, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
 
@@ -143,9 +148,20 @@ object WidgetRender {
             val label = SpannableString("${i + 1}")
             if (on) label.setSpan(StyleSpan(Typeface.BOLD), 0, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             rv.setViewVisibility(tab, View.VISIBLE)
-            rv.setTextViewText(tab, label)
-            rv.setTextColor(tab, rgbToArgb(contrastTextRgb(tabBg), if (on) 255 else 170))
-            rv.setInt(tab, "setBackgroundColor", rgbToArgb(tabBg, if (on) 255 else 120))
+            rv.setTextViewText(TABT_IDS[i], label)
+            rv.setTextColor(TABT_IDS[i], rgbToArgb(contrastTextRgb(tabBg), if (on) 255 else 190))
+            // 最初のタブは左下、最後のタブは右下だけ丸く（メモ本体の形とつなげる）
+            rv.setImageViewResource(
+                TABB_IDS[i],
+                when {
+                    n == 1 -> R.drawable.tab_single
+                    i == 0 -> R.drawable.tab_left
+                    i == n - 1 -> R.drawable.tab_right
+                    else -> R.drawable.tab_mid
+                },
+            )
+            rv.setInt(TABB_IDS[i], "setColorFilter", rgbToArgb(tabBg))
+            rv.setInt(TABB_IDS[i], "setImageAlpha", if (on) 255 else 130)
             val sw = Intent(ctx, PageSwitchReceiver::class.java).apply {
                 action = ACTION_PAGE
                 data = Uri.parse("fusen://page/$id/$i")

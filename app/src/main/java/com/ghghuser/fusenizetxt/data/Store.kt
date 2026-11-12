@@ -238,8 +238,15 @@ class Store(ctx: Context) {
         }
 
     var listBgAlpha: Int
-        get() = sp.getInt("listBgA", 180)
+        get() = sp.getInt("listBgA", 200)
         set(v) {
             sp.edit().putInt("listBgA", v.coerceIn(0, 255)).apply()
+        }
+
+    /** アプリで開いた時の編集欄の色。null = 一覧の配色に合わせる */
+    var editorBgColor: Int?
+        get() = if (sp.contains("editorBg")) sp.getInt("editorBg", 0) else null
+        set(v) {
+            if (v == null) sp.edit().remove("editorBg").apply() else sp.edit().putInt("editorBg", v and 0xFFFFFF).apply()
         }
 }

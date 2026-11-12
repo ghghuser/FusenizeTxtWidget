@@ -6,13 +6,17 @@ import org.json.JSONObject
 fun rgbToArgb(rgb: Int, alpha: Int = 255): Int =
     ((alpha and 0xFF) shl 24) or (rgb and 0xFFFFFF)
 
-/** 背景色に対して読みやすい文字色(RGB)を返す。明るい背景なら濃い色、暗い背景なら白 */
+/** 背景色に対して読みやすい文字色(RGB)を返す。コントラスト比が高い方（濃い色 or 白）を選ぶ。中間色では濃い文字になりやすい */
 fun contrastTextRgb(bgRgb: Int): Int {
-    val r = (bgRgb shr 16) and 0xFF
-    val g = (bgRgb shr 8) and 0xFF
-    val b = bgRgb and 0xFF
-    val lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-    return if (lum > 0.55) 0x212121 else 0xFFFFFF
+    fun lin(c: Int): Double {
+        val v = c / 255.0
+        return if (v <= 0.03928) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+    }
+    val l = 0.2126 * lin((bgRgb shr 16) and 0xFF) + 0.7152 * lin((bgRgb shr 8) and 0xFF) + 0.0722 * lin(bgRgb and 0xFF)
+    val darkL = 0.006 // 0x121212
+    val cWhite = 1.05 / (l + 0.05)
+    val cDark = (l + 0.05) / (darkL + 0.05)
+    return if (cDark >= cWhite) 0x121212 else 0xFFFFFF
 }
 
 data class Insets(val l: Int = 0, val t: Int = 0, val r: Int = 0, val b: Int = 0) {
@@ -104,7 +108,7 @@ data class PageCfg(
 /** ウィジェット1つ分の設定（ウィジェットID単位）。最大5ページ。 */
 data class WidgetConfig(
     val widgetId: Int,
-    val pages: List<PageCfg> = listOf(PageCfg()),
+    val pages: List<PageCfg> = listOf(PageCfg(), PageCfg(bgColor = PAGE_COLORS[1])), // 既定は2ページ
     val current: Int = 0,
     val style: WidgetStyle = WidgetStyle(),
 ) {

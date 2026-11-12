@@ -43,6 +43,8 @@ import com.ghghuser.fusenizetxt.data.Backup
 import com.ghghuser.fusenizetxt.data.Importer
 import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
+import com.ghghuser.fusenizetxt.data.rgbToArgb
+import androidx.compose.ui.graphics.Color
 import com.ghghuser.fusenizetxt.data.ZipTools
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -164,7 +166,9 @@ class SettingsActivity : ComponentActivity() {
             }
         }
 
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        val scheme = listBg?.let { tintedScheme(Color(rgbToArgb(it))) } ?: MaterialTheme.colorScheme
+        MaterialTheme(colorScheme = scheme) {
+        Surface(Modifier.fillMaxSize(), color = scheme.background) {
             Column(
                 Modifier.systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -265,19 +269,29 @@ class SettingsActivity : ComponentActivity() {
                     listBg = it
                     store.listBgColor = it
                 }
-                SliderRow("背景の透過度（255=不透明、初期値180）", listAlpha, 0, 255) {
+                SliderRow("背景の透過度（255=不透明、初期値200）", listAlpha, 0, 255) {
                     listAlpha = it
                     store.listBgAlpha = it
                 }
                 TextButton(onClick = {
                     listBg = null
-                    listAlpha = 180
+                    listAlpha = 200
                     store.listBgColor = null
-                    store.listBgAlpha = 180
+                    store.listBgAlpha = 200
                 }) { Text("テーマ既定に戻す") }
+                var edBg by remember { mutableStateOf(store.editorBgColor) }
+                ColorPickerRow("アプリで開いたときの編集欄の色", edBg ?: (listBg ?: 0xF0F0F0), BG_PRESETS) {
+                    edBg = it
+                    store.editorBgColor = it
+                }
+                TextButton(onClick = {
+                    edBg = null
+                    store.editorBgColor = null
+                }) { Text("編集欄の色を既定に戻す") }
                 HorizontalDivider()
                 Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
             }
+        }
         }
         ConflictDialog(importer)
     }

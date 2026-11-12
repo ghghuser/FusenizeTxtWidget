@@ -80,45 +80,110 @@
             android:orientation="horizontal"
             android:visibility="gone">
 
-            <TextView
+            <FrameLayout
                 android:id="@+id/w_tab0"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textSize="13sp" />
+                android:layout_weight="1">
 
-            <TextView
+                <ImageView
+                    android:id="@+id/w_tabb0"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitXY"
+                    android:src="@drawable/tab_mid" />
+
+                <TextView
+                    android:id="@+id/w_tabt0"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textSize="13sp" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/w_tab1"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textSize="13sp" />
+                android:layout_weight="1">
 
-            <TextView
+                <ImageView
+                    android:id="@+id/w_tabb1"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitXY"
+                    android:src="@drawable/tab_mid" />
+
+                <TextView
+                    android:id="@+id/w_tabt1"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textSize="13sp" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/w_tab2"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textSize="13sp" />
+                android:layout_weight="1">
 
-            <TextView
+                <ImageView
+                    android:id="@+id/w_tabb2"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitXY"
+                    android:src="@drawable/tab_mid" />
+
+                <TextView
+                    android:id="@+id/w_tabt2"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textSize="13sp" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/w_tab3"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textSize="13sp" />
+                android:layout_weight="1">
 
-            <TextView
+                <ImageView
+                    android:id="@+id/w_tabb3"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitXY"
+                    android:src="@drawable/tab_mid" />
+
+                <TextView
+                    android:id="@+id/w_tabt3"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textSize="13sp" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/w_tab4"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:textSize="13sp" />
+                android:layout_weight="1">
+
+                <ImageView
+                    android:id="@+id/w_tabb4"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitXY"
+                    android:src="@drawable/tab_mid" />
+
+                <TextView
+                    android:id="@+id/w_tabt4"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textSize="13sp" />
+            </FrameLayout>
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>
