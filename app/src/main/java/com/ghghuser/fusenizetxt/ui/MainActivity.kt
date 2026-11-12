@@ -88,6 +88,11 @@ class MainActivity : ComponentActivity() {
         setContent { FusenTheme { MainScreen() } }
     }
 
+    override fun onResume() {
+        super.onResume()
+        com.ghghuser.fusenizetxt.data.Brightness.apply(this)
+    }
+
     private fun openEditor(uri: Uri) {
         startActivity(Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()))
     }

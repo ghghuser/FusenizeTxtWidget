@@ -43,6 +43,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -140,7 +141,7 @@ class UndoManager {
     }
 }
 
-private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY }
+private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY, REMIND }
 
 private data class HistItem(val v: History.Version, val preview: String)
 
@@ -276,6 +277,30 @@ class EditActivity : ComponentActivity() {
             store.addRecent(u.toString())
             loaded = true
         }
+    }
+
+    private val notifPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) Toast.makeText(this, "通知が許可されていないため、リマインダーは表示されません（端末の設定で許可できます）", Toast.LENGTH_LONG).show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        com.ghghuser.fusenizetxt.data.Brightness.apply(this)
+    }
+
+    private fun setReminder(at: Long, repeat: Int) {
+        val u = uriRef.get() ?: return
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        com.ghghuser.fusenizetxt.data.Reminders.set(applicationContext, u.toString(), com.ghghuser.fusenizetxt.data.Reminder(at, repeat))
+        Toast.makeText(this, "リマインダーを設定しました", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun clearReminder() {
+        val u = uriRef.get() ?: return
+        com.ghghuser.fusenizetxt.data.Reminders.clear(applicationContext, u.toString())
+        Toast.makeText(this, "リマインダーを解除しました", Toast.LENGTH_SHORT).show()
     }
 
     override fun onStart() {
@@ -555,6 +580,9 @@ class EditActivity : ComponentActivity() {
         var menuOpen by remember { mutableStateOf(false) }
         var dlg by remember { mutableStateOf(Dlg.NONE) }
         var renameText by remember { mutableStateOf("") }
+        var remAt by remember { mutableStateOf(0L) }
+        var remRepeat by remember { mutableStateOf(0) }
+        var remExists by remember { mutableStateOf(false) }
         val focus = remember { FocusRequester() }
         val cs = MaterialTheme.colorScheme
 
@@ -655,6 +683,14 @@ class EditActivity : ComponentActivity() {
                                         backToAutoName()
                                     })
                                 }
+                                DropdownMenuItem(text = { Text("リマインダー") }, onClick = {
+                                    menuOpen = false
+                                    val cur = uriRef.get()?.let { com.ghghuser.fusenizetxt.data.Reminders.get(applicationContext, it.toString()) }
+                                    remAt = cur?.time?.takeIf { it > System.currentTimeMillis() } ?: (System.currentTimeMillis() / 3600000 + 1) * 3600000
+                                    remRepeat = cur?.repeat ?: 0
+                                    remExists = cur != null
+                                    dlg = Dlg.REMIND
+                                })
                                 DropdownMenuItem(text = { Text("履歴") }, onClick = {
                                     menuOpen = false
                                     openHistory()
@@ -821,6 +857,56 @@ class EditActivity : ComponentActivity() {
                     }) { Text("クリア") }
                 },
                 dismissButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") } },
+            )
+            Dlg.REMIND -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("リマインダー") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("このメモを指定の日時に通知します。通知を押すとこのメモが開きます。", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            java.text.SimpleDateFormat("yyyy/MM/dd (E) HH:mm", java.util.Locale.getDefault()).format(Date(remAt)),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = {
+                                val c = java.util.Calendar.getInstance().apply { timeInMillis = remAt }
+                                android.app.DatePickerDialog(this@EditActivity, { _, y, m, d ->
+                                    val n = java.util.Calendar.getInstance().apply { timeInMillis = remAt; set(y, m, d) }
+                                    remAt = n.timeInMillis
+                                }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH)).show()
+                            }) { Text("日付") }
+                            OutlinedButton(onClick = {
+                                val c = java.util.Calendar.getInstance().apply { timeInMillis = remAt }
+                                android.app.TimePickerDialog(this@EditActivity, { _, h, mi ->
+                                    val n = java.util.Calendar.getInstance().apply { timeInMillis = remAt; set(java.util.Calendar.HOUR_OF_DAY, h); set(java.util.Calendar.MINUTE, mi); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }
+                                    remAt = n.timeInMillis
+                                }, c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE), true).show()
+                            }) { Text("時刻") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("1回だけ", "毎日", "毎週").forEachIndexed { i, l ->
+                                androidx.compose.material3.FilterChip(selected = remRepeat == i, onClick = { remRepeat = i }, label = { Text(l) })
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (remAt <= System.currentTimeMillis()) {
+                            Toast.makeText(this@EditActivity, "未来の日時を指定してください", Toast.LENGTH_SHORT).show()
+                        } else {
+                            dlg = Dlg.NONE
+                            setReminder(remAt, remRepeat)
+                        }
+                    }) { Text("設定") }
+                },
+                dismissButton = {
+                    Row {
+                        if (remExists) TextButton(onClick = { dlg = Dlg.NONE; clearReminder() }) { Text("解除") }
+                        TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") }
+                    }
+                },
             )
             Dlg.RENAME -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },

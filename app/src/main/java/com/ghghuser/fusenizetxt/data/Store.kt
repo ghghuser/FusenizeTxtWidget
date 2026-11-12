@@ -138,6 +138,7 @@ class Store(ctx: Context) {
                 }
             }
             History.rename(app, old, new)
+            Reminders.rename(app, old, new)
             val fav = favorites()
             if (old in fav) {
                 sp.edit().putStringSet("fav", (fav - old) + new).apply()
@@ -172,6 +173,7 @@ class Store(ctx: Context) {
                 }
             }
             History.clear(app, uri)
+            Reminders.clear(app, uri)
             sp.edit().putStringSet("fav", favorites() - uri).apply()
             val created = readObj("created")
             created.remove(uri)
@@ -248,5 +250,18 @@ class Store(ctx: Context) {
         get() = if (sp.contains("editorBg")) sp.getInt("editorBg", 0) else null
         set(v) {
             if (v == null) sp.edit().remove("editorBg").apply() else sp.edit().putInt("editorBg", v and 0xFFFFFF).apply()
+        }
+
+    /** 画面の明るさをアプリ内で固定するか（既定はオフ） */
+    var brightnessLock: Boolean
+        get() = sp.getBoolean("brLock", false)
+        set(v) {
+            sp.edit().putBoolean("brLock", v).apply()
+        }
+
+    var brightnessLevel: Int
+        get() = sp.getInt("brLevel", 50)
+        set(v) {
+            sp.edit().putInt("brLevel", v.coerceIn(5, 100)).apply()
         }
 }

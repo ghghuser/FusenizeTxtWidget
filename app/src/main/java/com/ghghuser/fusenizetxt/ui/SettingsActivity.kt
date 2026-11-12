@@ -116,6 +116,11 @@ class SettingsActivity : ComponentActivity() {
         toast(if (n >= 0) "${n}件のメモをzipに書き出しました" else "zipの書き出しに失敗しました")
     }
 
+    override fun onResume() {
+        super.onResume()
+        com.ghghuser.fusenizetxt.data.Brightness.apply(this)
+    }
+
     @Composable
     private fun SettingsScreen() {
         val store = remember { Store(this) }
@@ -279,6 +284,26 @@ class SettingsActivity : ComponentActivity() {
                     store.listBgColor = null
                     store.listBgAlpha = 200
                 }) { Text("テーマ既定に戻す") }
+                Text("画面の明るさ", style = MaterialTheme.typography.titleMedium)
+                var brOn by remember { mutableStateOf(store.brightnessLock) }
+                var brLv by remember { mutableIntStateOf(store.brightnessLevel) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("アプリ画面を指定の明るさに固定", Modifier.weight(1f))
+                    Switch(checked = brOn, onCheckedChange = {
+                        brOn = it
+                        store.brightnessLock = it
+                        com.ghghuser.fusenizetxt.data.Brightness.apply(this@SettingsActivity)
+                    })
+                }
+                if (brOn) {
+                    SliderRow("明るさ（%）", brLv, 5, 100) {
+                        brLv = it
+                        store.brightnessLevel = it
+                        com.ghghuser.fusenizetxt.data.Brightness.apply(this@SettingsActivity)
+                    }
+                    Text("このアプリを開いている間だけ有効です（端末全体の設定は変えません）。", style = MaterialTheme.typography.labelSmall)
+                }
+                HorizontalDivider()
                 var edBg by remember { mutableStateOf(store.editorBgColor) }
                 ColorPickerRow("アプリで開いたときの編集欄の色", edBg ?: (listBg ?: 0xF0F0F0), BG_PRESETS) {
                     edBg = it
