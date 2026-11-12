@@ -57,6 +57,9 @@ fun StylePanel(
             FilterChip(selected = style.paper, onClick = { onChange(style.copy(paper = !style.paper)) }, label = { Text("紙の質感") })
             FilterChip(selected = style.italic, onClick = { onChange(style.copy(italic = !style.italic)) }, label = { Text("斜体") })
         }
+        if (style.paper) {
+            SliderRow("質感の強さ（紙のノイズ・グラデーション）", style.paperStrength, 0, 100) { onChange(style.copy(paperStrength = it)) }
+        }
         HorizontalDivider()
         Text("水平配置", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -21,12 +21,13 @@ import java.security.MessageDigest
 /**
  * txtの読み書き。
  *  - 保存フォルダ（SAF）が設定されていればそのフォルダ
- *  - 未設定なら MediaStore 経由で Documents/FusenizeTxtWidget に自動作成して保存
+ *  - 未設定なら Documents/<保存フォルダ名>（既定 FusenizeTxt）に自動作成して保存（MediaStore → 直接ファイル → アプリ内の順に試す）
  * どちらのURIでも同じ関数で扱えるようにしている。
  */
 object MemoRepo {
-    const val DEFAULT_FOLDER_LABEL = "Documents/FusenizeTxtWidget"
-    private const val REL_PATH = "Documents/FusenizeTxtWidget/"
+    private fun folderName(ctx: Context): String = Store(ctx).folderName
+    private fun relPath(ctx: Context): String = "Documents/${folderName(ctx)}/"
+    fun defaultLabel(ctx: Context): String = "Documents/${folderName(ctx)}"
     private const val MAX_BYTES = 2 * 1024 * 1024
     private const val MAX_COPY_BYTES = 8 * 1024 * 1024
     private const val MAX_ORIG_BACKUPS = 100
@@ -70,18 +71,53 @@ object MemoRepo {
 
     private fun localDir(ctx: Context): File = File(ctx.filesDir, "memos").apply { mkdirs() }
 
-    private fun listLocal(ctx: Context): List<Entry> = try {
-        (localDir(ctx).listFiles() ?: emptyArray())
+    /** Documents/<保存フォルダ名> を直接ファイルとして扱う場合のフォルダ */
+    private fun publicDir(ctx: Context): File =
+        File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), folderName(ctx))
+
+    private fun listDir(dir: File): List<Entry> = try {
+        (dir.listFiles() ?: emptyArray())
             .filter { it.isFile && it.name.endsWith(".txt", ignoreCase = true) }
             .map { Entry(Uri.fromFile(it), it.name, it.lastModified()) }
     } catch (e: Exception) {
         emptyList()
     }
 
-    private fun treeDoc(ctx: Context): DocumentFile? {
+    private fun listLocal(ctx: Context): List<Entry> = listDir(localDir(ctx)) + listDir(publicDir(ctx))
+
+    /** 保存フォルダ（SAF）の根 */
+    private fun treeRoot(ctx: Context): DocumentFile? {
         val t = Store(ctx).treeUri ?: return null
         return try {
             DocumentFile.fromTreeUri(ctx, Uri.parse(t))
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private var cacheKey: String? = null
+    private var cacheDir: DocumentFile? = null
+
+    /**
+     * 実際にメモを置くフォルダ。選んだフォルダの名前が「保存フォルダ名」と同じならそのフォルダ、
+     * 違えばその中の「保存フォルダ名」フォルダ（なければ作る）。
+     */
+    private fun treeDoc(ctx: Context): DocumentFile? {
+        val root = treeRoot(ctx) ?: return null
+        val name = folderName(ctx)
+        val key = Store(ctx).treeUri + "|" + name
+        synchronized(this) {
+            val c = cacheDir
+            if (key == cacheKey && c != null && try { c.exists() } catch (e: Exception) { false }) return c
+        }
+        return try {
+            val dir = if (root.name == name) root
+            else root.findFile(name)?.takeIf { it.isDirectory } ?: root.createDirectory(name)
+            synchronized(this) {
+                cacheKey = key
+                cacheDir = dir
+            }
+            dir
         } catch (e: Exception) {
             null
         }
@@ -94,11 +130,24 @@ object MemoRepo {
         }
     }
 
-    /** SAFの保存フォルダを使っているか（false なら Documents/FusenizeTxtWidget） */
-    fun usingTree(ctx: Context): Boolean = hasFolderPermission(ctx) && treeDoc(ctx) != null
+    /** SAFの保存フォルダを使っているか（false なら Documents/<保存フォルダ名>） */
+    fun usingTree(ctx: Context): Boolean = hasFolderPermission(ctx) && treeRoot(ctx) != null
 
-    fun storageLabel(ctx: Context): String =
-        if (usingTree(ctx)) (treeDoc(ctx)?.name ?: "選択したフォルダ") else DEFAULT_FOLDER_LABEL
+    /** 画面表示用の保存先。フォルダへのアクセスはせず名前だけで組み立てる */
+    fun storageLabel(ctx: Context): String {
+        if (!usingTree(ctx)) return defaultLabel(ctx)
+        val root = treeRoot(ctx)?.name ?: return "選択したフォルダ/" + folderName(ctx)
+        val fn = folderName(ctx)
+        return if (root == fn) root else "$root/$fn"
+    }
+
+    /** 保存フォルダ名を変えた時などに呼ぶ */
+    fun resetCache() {
+        synchronized(this) {
+            cacheKey = null
+            cacheDir = null
+        }
+    }
 
     // ------------------------------------------------------------
     // 一覧
@@ -131,7 +180,7 @@ object MemoRepo {
                 MediaStore.MediaColumns.DATE_MODIFIED,
             )
             ctx.contentResolver.query(
-                filesUri, proj, "${MediaStore.MediaColumns.RELATIVE_PATH} = ?", arrayOf(REL_PATH), null
+                filesUri, proj, "${MediaStore.MediaColumns.RELATIVE_PATH} = ?", arrayOf(relPath(ctx)), null
             )?.use { c ->
                 while (c.moveToNext()) {
                     val n = c.getString(1) ?: continue
@@ -142,7 +191,8 @@ object MemoRepo {
         } catch (e: Exception) {
             // 一覧を取れなければ空として扱う
         }
-        return out + listLocal(ctx)
+        val names = out.map { it.name.lowercase() }.toSet()
+        return out + listLocal(ctx).filter { it.name.lowercase() !in names }
     }
 
     // ------------------------------------------------------------
@@ -360,13 +410,28 @@ object MemoRepo {
                 }
                 return Saved(f.uri, f.name ?: name)
             }
-            // Documents/FusenizeTxtWidget に作る。作成直後に読めなければ破棄してアプリ内フォルダに作る
-            val viaMedia = try {
-                createInMediaStore(ctx, name, bytes)
+            // Documents/<保存フォルダ名> に作る。MediaStore → 直接ファイル → アプリ内 の順に試す。
+            // 失敗の原因は storageNote に残して画面から確認できるようにする。
+            val notes = ArrayList<String>()
+            try {
+                createInMediaStore(ctx, name, bytes)?.let {
+                    Store(ctx).storageNote = ""
+                    return it
+                }
             } catch (e: Exception) {
-                null
+                notes.add("MediaStore: " + describe(e))
             }
-            return viaMedia ?: createLocal(ctx, name, bytes)
+            try {
+                createPublic(ctx, name, bytes)?.let {
+                    Store(ctx).storageNote = notes.joinToString(" / ") + " → 直接ファイルで作成"
+                    return it
+                }
+            } catch (e: Exception) {
+                notes.add("直接: " + describe(e))
+            }
+            val local = createLocal(ctx, name, bytes)
+            Store(ctx).storageNote = notes.joinToString(" / ") + (if (local != null) " → アプリ内に作成（ファイルアプリには出ません）" else "")
+            return local
         } catch (e: Exception) {
             return null
         }
@@ -376,23 +441,37 @@ object MemoRepo {
         val cv = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, REL_PATH)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, relPath(ctx))
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
-        val uri = ctx.contentResolver.insert(filesUri, cv) ?: return null
+        val uri = ctx.contentResolver.insert(filesUri, cv) ?: throw FileNotFoundException("insertがnullを返しました")
         try {
-            if (bytes != null) {
-                ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) }
-                    ?: throw FileNotFoundException("書き込み用ストリームを開けませんでした")
-            }
+            val os = ctx.contentResolver.openOutputStream(uri, "w")
+                ?: throw FileNotFoundException("書き込み用ストリームを開けませんでした")
+            os.use { if (bytes != null) it.write(bytes) }
+            val done = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            ctx.contentResolver.update(uri, done, null, null)
             openIn(ctx, uri).use { it.read() } // 作成直後に読めることを確認する
         } catch (e: Exception) {
             try {
                 ctx.contentResolver.delete(uri, null, null)
             } catch (e2: Exception) {
             }
-            return null
+            throw e
         }
         return Saved(uri, displayName(ctx, uri) ?: name)
+    }
+
+    /** Documents/<保存フォルダ名>/ に直接ファイルとして作る（MediaStoreが使えない端末向け） */
+    private fun createPublic(ctx: Context, name: String, bytes: ByteArray?): Saved? {
+        val dir = publicDir(ctx)
+        if (!dir.isDirectory && !dir.mkdirs()) throw FileNotFoundException("フォルダを作れません")
+        val f = File(dir, name)
+        if (f.exists()) return null
+        f.writeBytes(bytes ?: ByteArray(0))
+        val u = Uri.fromFile(f)
+        openIn(ctx, u).use { it.read() }
+        return Saved(u, f.name)
     }
 
     private fun createLocal(ctx: Context, name: String, bytes: ByteArray?): Saved? = try {

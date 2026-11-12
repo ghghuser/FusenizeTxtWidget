@@ -734,7 +734,7 @@ class EditActivity : ComponentActivity() {
                             .background(editorBg, RoundedCornerShape(8.dp))
                             .then(
                                 if (widgetMode && style.paper) Modifier.background(
-                                    Brush.linearGradient(listOf(Color.White.copy(alpha = 0.12f), Color.Black.copy(alpha = 0.13f))),
+                                    Brush.linearGradient(listOf(Color.White.copy(alpha = 0.17f * style.paperStrength / 100f), Color.Black.copy(alpha = 0.18f * style.paperStrength / 100f))),
                                     RoundedCornerShape(8.dp),
                                 ) else Modifier
                             )

@@ -202,6 +202,17 @@ class MainActivity : ComponentActivity() {
                         color = onBg.copy(alpha = 0.6f),
                     )
                 }
+                if (tab == 1 && !MemoRepo.usingTree(this@MainActivity)) {
+                    val note = Store(this@MainActivity).storageNote
+                    if (note.isNotEmpty()) {
+                        Text(
+                            "保存先の作成について: $note",
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = onBg.copy(alpha = 0.6f),
+                        )
+                    }
+                }
                 if (sorted.isEmpty()) {
                     Text(
                         if (tab == 0) "まだ開いたメモがありません。\n「フォルダ内」タブか＋から開けます。" else "txtがありません。＋で作成できます。",

@@ -37,6 +37,7 @@ data class WidgetStyle(
     val textColor: Int = 0xF5F5F5, // 明るい文字（autoText=trueなら背景に合わせて自動）
     val textSizeSp: Int = 16, // ウィジェット表示の文字サイズ
     val editSizeSp: Int = 16, // 編集画面の文字サイズ（ウィジェットとは別）
+    val paperStrength: Int = 70, // 質感の強さ 0〜100
     val paper: Boolean = true, // 紙の質感（薄いグラデーション＋ノイズ）
     val hAlign: Int = 0, // 0=左 1=中央 2=右
     val vAlign: Int = 0, // 0=上 1=中央 2=下
@@ -50,7 +51,7 @@ data class WidgetStyle(
 
     fun toJson(): JSONObject = JSONObject()
         .put("bg", bgColor).put("bgA", bgAlpha).put("auto", autoText).put("fg", textColor)
-        .put("size", textSizeSp).put("esize", editSizeSp).put("paper", paper).put("h", hAlign).put("v", vAlign)
+        .put("size", textSizeSp).put("esize", editSizeSp).put("paper", paper).put("pstr", paperStrength).put("h", hAlign).put("v", vAlign)
         .put("bold", bold).put("italic", italic)
         .put("outer", outer.toJson()).put("inner", inner.toJson())
 
@@ -66,6 +67,7 @@ data class WidgetStyle(
                 textSizeSp = o.optInt("size", d.textSizeSp).coerceIn(12, 32),
                 editSizeSp = o.optInt("esize", o.optInt("size", d.editSizeSp)).coerceIn(12, 32),
                 paper = o.optBoolean("paper", d.paper),
+                paperStrength = o.optInt("pstr", d.paperStrength).coerceIn(0, 100),
                 hAlign = o.optInt("h", d.hAlign).coerceIn(0, 2),
                 vAlign = o.optInt("v", d.vAlign).coerceIn(0, 2),
                 bold = o.optBoolean("bold", d.bold),

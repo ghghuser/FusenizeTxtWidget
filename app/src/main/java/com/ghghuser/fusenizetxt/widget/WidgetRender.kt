@@ -90,7 +90,7 @@ object WidgetRender {
         rv.setImageViewResource(R.id.w_bg, if (hasTabs) R.drawable.widget_note_bg_top else R.drawable.widget_note_bg)
         rv.setImageViewResource(R.id.w_paper, if (hasTabs) R.drawable.widget_note_paper_top else R.drawable.widget_note_paper)
         rv.setViewVisibility(R.id.w_paper, if (s.paper) android.view.View.VISIBLE else android.view.View.GONE)
-        rv.setInt(R.id.w_paper, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
+        rv.setInt(R.id.w_paper, "setImageAlpha", (s.bgAlpha.coerceIn(0, 255) * s.paperStrength / 100).coerceIn(0, 255))
 
         // 文字
         val tid = when (s.hAlign) {

@@ -21,6 +21,14 @@ class Store(ctx: Context) {
         const val SORT_CREATED = 1
         const val SORT_NAME = 2
         private const val MAX_RECENTS = 100
+        const val DEFAULT_FOLDER = "FusenizeTxt"
+        private val badFolderChars = Regex("[\\\\/:*?\"<>|\\p{Cntrl}]")
+
+        /** フォルダ名として使えない文字を除く。空・「.」「..」は null */
+        fun sanitizeFolder(s: String): String? {
+            val c = s.replace(badFolderChars, "").trim().trim('.').take(60).trim()
+            return c.ifEmpty { null }
+        }
     }
 
     // ---- 保存フォルダ ----
@@ -263,5 +271,21 @@ class Store(ctx: Context) {
         get() = sp.getInt("brLevel", 50)
         set(v) {
             sp.edit().putInt("brLevel", v.coerceIn(5, 100)).apply()
+        }
+
+    /** 保存フォルダ名（既定 FusenizeTxt）。未設定の保存先では Documents/<名前>、フォルダ指定時はその中（または同名のそのフォルダ）を使う */
+    var folderName: String
+        get() = sp.getString("folderName", null)?.let { sanitizeFolder(it) } ?: DEFAULT_FOLDER
+        set(v) {
+            val c = sanitizeFolder(v)
+            if (c == null || c == DEFAULT_FOLDER) sp.edit().remove("folderName").apply()
+            else sp.edit().putString("folderName", c).apply()
+        }
+
+    /** 直近の保存先作成の問題（原因の切り分け用。問題がなければ空） */
+    var storageNote: String
+        get() = sp.getString("storageNote", "") ?: ""
+        set(v) {
+            sp.edit().putString("storageNote", v.take(400)).apply()
         }
 }

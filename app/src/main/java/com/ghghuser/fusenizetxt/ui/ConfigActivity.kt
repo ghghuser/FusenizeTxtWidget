@@ -73,7 +73,7 @@ fun persistTreeUri(ctx: Context, uri: Uri): Boolean {
 
 /**
  * ウィジェット追加時（または未設定ウィジェットのタップ時）に開く設定画面。
- * 保存フォルダが未設定でも Documents/FusenizeTxtWidget に自動作成して新規メモを作れる。
+ * 保存フォルダが未設定でも Documents/<保存フォルダ名（既定 FusenizeTxt）> に自動作成して新規メモを作れる。
  */
 class ConfigActivity : ComponentActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID

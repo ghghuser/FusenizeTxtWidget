@@ -25,6 +25,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -185,6 +186,32 @@ class SettingsActivity : ComponentActivity() {
 
                 Text("保存先", style = MaterialTheme.typography.titleMedium)
                 Text(storage, style = MaterialTheme.typography.bodySmall)
+                var folderInput by remember { mutableStateOf(store.folderName) }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = folderInput,
+                        onValueChange = { folderInput = it.take(60) },
+                        label = { Text("保存フォルダ名（既定 FusenizeTxt）") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedButton(onClick = {
+                        val c = Store.sanitizeFolder(folderInput)
+                        if (c == null) {
+                            toast("使えない名前です")
+                        } else {
+                            store.folderName = c
+                            folderInput = c
+                            MemoRepo.resetCache()
+                            storage = MemoRepo.storageLabel(this@SettingsActivity)
+                            toast("保存フォルダ名を「$c」にしました")
+                        }
+                    }) { Text("適用") }
+                }
+                Text(
+                    "選んだフォルダの名前がこれと同じならそのフォルダを、違えばその中にこの名前のフォルダを作って保存先にします。名前を変えても、以前のフォルダのメモは移動しません。",
+                    style = MaterialTheme.typography.labelSmall,
+                )
                 Button(onClick = { treePicker.launch(null) }, modifier = Modifier.fillMaxWidth()) {
                     Text("保存フォルダを設定・変更")
                 }
