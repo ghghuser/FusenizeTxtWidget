@@ -146,6 +146,9 @@ class Store(ctx: Context) {
                 }
             }
             History.rename(app, old, new)
+            if (isManual(old)) {
+                sp.edit().putStringSet("manualNames", (manualSet() - old) + new).apply()
+            }
             Reminders.rename(app, old, new)
             val fav = favorites()
             if (old in fav) {
@@ -181,6 +184,7 @@ class Store(ctx: Context) {
                 }
             }
             History.clear(app, uri)
+            sp.edit().putStringSet("manualNames", manualSet() - uri).apply()
             Reminders.clear(app, uri)
             sp.edit().putStringSet("fav", favorites() - uri).apply()
             val created = readObj("created")
@@ -302,4 +306,16 @@ class Store(ctx: Context) {
         set(v) {
             sp.edit().putBoolean("lineNo", v).apply()
         }
+
+    // ---- 自分で名前を付けた（固定した）ファイル ----
+    fun manualSet(): Set<String> = synchronized(lock) { sp.getStringSet("manualNames", emptySet()) ?: emptySet() }
+
+    fun isManual(uri: String): Boolean = uri in manualSet()
+
+    fun setManual(uri: String, on: Boolean) {
+        synchronized(lock) {
+            val cur = manualSet()
+            sp.edit().putStringSet("manualNames", if (on) cur + uri else cur - uri).apply()
+        }
+    }
 }

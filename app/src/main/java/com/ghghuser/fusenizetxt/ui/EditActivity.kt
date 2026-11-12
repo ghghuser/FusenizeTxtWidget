@@ -205,7 +205,7 @@ class EditActivity : ComponentActivity() {
             style = cfg.style
             pageCount = cfg.pages.size
             pageBg = cfg.pages[page].bgColor
-            manualName = cfg.pages[page].manualName
+            manualName = cfg.pages[page].manualName || (cfg.pages[page].fileUri?.let { store.isManual(it) } ?: false)
             val u = cfg.pages[page].fileUri
             if (u == null) {
                 startActivity(
@@ -262,7 +262,8 @@ class EditActivity : ComponentActivity() {
                 return@launch
             }
             fileName = name
-            if (!widgetMode) manualName = !MemoRepo.hasNumberPrefix(name)
+            if (!widgetMode) manualName = store.isManual(u.toString()) || !MemoRepo.hasNumberPrefix(name)
+            else if (store.isManual(u.toString())) manualName = true
             result.getOrNull()?.let { ft ->
                 withContext(Dispatchers.IO) {
                     val m = store.meta(u.toString())
@@ -397,6 +398,7 @@ class EditActivity : ComponentActivity() {
                 } else {
                     Drafts.delete(ctx, u)
                     uriRef.set(r.uri)
+                    Store(ctx).setManual(r.uri.toString(), true)
                     if (wid != AppWidgetManager.INVALID_APPWIDGET_ID) {
                         Store(ctx).updateConfig(wid) { it.updatePage(pg) { p -> p.copy(manualName = true) } }
                     }
@@ -415,6 +417,7 @@ class EditActivity : ComponentActivity() {
 
     private fun backToAutoName() {
         manualName = false
+        uriRef.get()?.let { store.setManual(it.toString(), false) }
         if (widgetMode) store.updateConfig(widgetId) { it.updatePage(page) { p -> p.copy(manualName = false) } }
         lastSaved = FORCE_RESAVE
         saveNow()
@@ -698,7 +701,7 @@ class EditActivity : ComponentActivity() {
                     // 1段目: ファイル名 / 画面オン / メニュー / 閉じる
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            (if (manualName) "📌 " else "") + fileName.ifEmpty { "…" } +
+                            (if (manualName) "🐾 " else "🌱 ") + fileName.ifEmpty { "…" } +
                                 (if (charsetName != "UTF-8") "  [" + (MemoRepo.ENCODINGS.firstOrNull { it.first == charsetName }?.second ?: charsetName) + "]" else ""),
                             modifier = Modifier.weight(1f).clickable {
                                 renameText = fileName.removeSuffix(".txt")

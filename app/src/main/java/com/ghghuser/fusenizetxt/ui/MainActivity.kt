@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.ghghuser.fusenizetxt.ui
 
@@ -59,6 +59,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
+import com.ghghuser.fusenizetxt.FusenApp
+import androidx.compose.foundation.combinedClickable
+import kotlinx.coroutines.sync.withLock
 import com.ghghuser.fusenizetxt.data.Importer
 import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
@@ -76,6 +79,7 @@ private data class MemoRow(
     val modified: Long,
     val created: Long,
     val fav: Boolean,
+    val manual: Boolean,
 )
 
 /** アプリアイコンから起動した時の一覧画面（開いたファイル / フォルダ内） */
@@ -100,9 +104,10 @@ class MainActivity : ComponentActivity() {
 
     private fun loadRows(store: Store, tab: Int): List<MemoRow> {
         val fav = store.favorites()
+        val man = store.manualSet()
         fun make(uri: Uri, name: String, mod: Long): MemoRow {
             val key = uri.toString()
-            return MemoRow(uri, name, mod, store.createdAt(key) ?: mod, key in fav)
+            return MemoRow(uri, name, mod, store.createdAt(key) ?: mod, key in fav, key in man || !MemoRepo.hasNumberPrefix(name))
         }
         return if (tab == 1) {
             MemoRepo.listTxt(this).map { make(it.uri, it.name, it.lastModified) }
@@ -126,6 +131,9 @@ class MainActivity : ComponentActivity() {
         var listAlpha by remember { mutableIntStateOf(store.listBgAlpha) }
         var storage by remember { mutableStateOf(MemoRepo.storageLabel(this)) }
         var paper by remember { mutableIntStateOf(store.appPaper) }
+        var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
+        var confirmDelete by remember { mutableStateOf(false) }
+        androidx.activity.compose.BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
 
         val owner = LocalLifecycleOwner.current
         DisposableEffect(owner) {
@@ -174,6 +182,14 @@ class MainActivity : ComponentActivity() {
             },
         ) { pad ->
             Column(Modifier.padding(pad).fillMaxSize()) {
+                if (selected.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { selected = emptySet() }) { Text("✕ 解除", color = onBg) }
+                        Text("${selected.size}件選択", modifier = Modifier.weight(1f), color = onBg)
+                        TextButton(onClick = { selected = sorted.map { it.uri.toString() }.toSet() }) { Text("全選択", color = onBg) }
+                        TextButton(onClick = { confirmDelete = true }) { Text("🗑 削除", color = Color(0xFFE57373)) }
+                    }
+                } else
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("FusenizeTxt", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleLarge, color = onBg)
                     var sortMenu by remember { mutableStateOf(false) }
@@ -225,11 +241,28 @@ class MainActivity : ComponentActivity() {
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(sorted, key = { it.uri.toString() }) { r ->
                             Row(
-                                Modifier.fillMaxWidth().clickable { openEditor(r.uri) }.padding(start = 16.dp, top = 3.dp, bottom = 3.dp),
+                                Modifier.fillMaxWidth()
+                                    .background(if (r.uri.toString() in selected) onBg.copy(alpha = 0.18f) else Color.Transparent)
+                                    .combinedClickable(
+                                        onClick = {
+                                            val k = r.uri.toString()
+                                            if (selected.isNotEmpty()) selected = if (k in selected) selected - k else selected + k
+                                            else openEditor(r.uri)
+                                        },
+                                        onLongClick = {
+                                            val k = r.uri.toString()
+                                            selected = if (k in selected) selected - k else selected + k
+                                        },
+                                    )
+                                    .padding(start = 16.dp, top = 3.dp, bottom = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(MemoRepo.displayTitle(r.name), maxLines = 1, overflow = TextOverflow.Ellipsis, color = onBg, style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        (if (r.uri.toString() in selected) "☑ " else if (selected.isNotEmpty()) "☐ " else "") +
+                                            (if (r.manual) "🐾 " else "🌱 ") +
+                                            (if (r.manual && MemoRepo.hasNumberPrefix(r.name)) r.name.removeSuffix(".txt").removeSuffix(".TXT") else MemoRepo.displayTitle(r.name)),
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis, color = onBg, style = MaterialTheme.typography.bodyLarge)
                                     if (r.modified > 0) {
                                         Text(
                                             dateFmt.format(Date(r.modified)),
@@ -249,6 +282,40 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+            if (confirmDelete) {
+                AlertDialog(
+                    onDismissRequest = { confirmDelete = false },
+                    title = { Text("${selected.size}件のメモを削除しますか？") },
+                    text = { Text("選んだメモのtxtファイルを削除します。元に戻せません。ウィジェットに設定されているメモは未設定に戻ります。") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val targets = selected.toList()
+                            confirmDelete = false
+                            selected = emptySet()
+                            lifecycleScope.launch {
+                                val ok = withContext(Dispatchers.IO) {
+                                    var n = 0
+                                    FusenApp.saveMutex.withLock {
+                                        for (k in targets) {
+                                            val u = Uri.parse(k)
+                                            if (MemoRepo.delete(applicationContext, u)) {
+                                                com.ghghuser.fusenizetxt.data.Drafts.delete(applicationContext, u)
+                                                store.removeUri(k)
+                                                n++
+                                            }
+                                        }
+                                    }
+                                    n
+                                }
+                                toast(if (ok == targets.size) "${ok}件削除しました" else "${ok}件削除しました（${targets.size - ok}件は削除できませんでした）")
+                                FusenApp.refreshWidgets(applicationContext)
+                                tick++
+                            }
+                        }) { Text("削除", color = Color(0xFFE57373)) }
+                    },
+                    dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("キャンセル") } },
+                )
+            }
         }
     }
 }
