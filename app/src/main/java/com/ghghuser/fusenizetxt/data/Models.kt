@@ -108,7 +108,7 @@ data class PageCfg(
 /** ウィジェット1つ分の設定（ウィジェットID単位）。最大5ページ。 */
 data class WidgetConfig(
     val widgetId: Int,
-    val pages: List<PageCfg> = listOf(PageCfg(), PageCfg(bgColor = PAGE_COLORS[1])), // 既定は2ページ
+    val pages: List<PageCfg> = listOf(PageCfg(), PageCfg(bgColor = PAGE_COLORS[1]), PageCfg(bgColor = PAGE_COLORS[2])), // 既定は3ページ
     val current: Int = 0,
     val style: WidgetStyle = WidgetStyle(),
 ) {

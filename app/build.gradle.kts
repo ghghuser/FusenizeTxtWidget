@@ -20,6 +20,17 @@ android {
         versionName = "0.2.$buildNumber"
     }
 
+    // CIのランナーは毎回新しいデバッグ署名鍵を作るため、更新インストールが署名不一致で失敗していた。
+    // リポジトリ内の固定キーで署名して、以降のビルドを上書き更新できるようにする（デバッグ用途の鍵）。
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug-fixed.keystore")
+            storePassword = "android"
+            keyAlias = "fusenize"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
