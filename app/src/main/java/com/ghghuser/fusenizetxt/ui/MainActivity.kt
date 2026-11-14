@@ -98,8 +98,8 @@ class MainActivity : ComponentActivity() {
         com.ghghuser.fusenizetxt.data.Brightness.apply(this)
     }
 
-    private fun openEditor(uri: Uri) {
-        startActivity(Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()))
+    private fun openEditor(uri: Uri, isNew: Boolean = false) {
+        startActivity(Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()).putExtra(EditActivity.EXTRA_NEW, isNew))
     }
 
     private fun loadRows(store: Store, tab: Int): List<MemoRow> {
@@ -126,6 +126,8 @@ class MainActivity : ComponentActivity() {
         var tab by remember { mutableIntStateOf(0) }
         var tick by remember { mutableIntStateOf(0) }
         var sort by remember { mutableIntStateOf(store.sortMode) }
+        var sortRev by remember { mutableStateOf(store.sortReverse) }
+        var creating by remember { mutableStateOf(false) }
         var rows by remember { mutableStateOf<List<MemoRow>>(emptyList()) }
         var listBg by remember { mutableStateOf(store.listBgColor) }
         var listAlpha by remember { mutableIntStateOf(store.listBgAlpha) }
@@ -154,12 +156,14 @@ class MainActivity : ComponentActivity() {
             rows = withContext(Dispatchers.IO) { loadRows(store, tab) }
         }
 
-        val sorted = remember(rows, sort) {
-            val base = when (sort) {
-                Store.SORT_CREATED -> rows.sortedByDescending { it.created }
-                Store.SORT_NAME -> rows.sortedBy { it.name.lowercase() }
-                else -> rows.sortedByDescending { it.modified }
+        val sorted = remember(rows, sort, sortRev) {
+            val asc = (sort == Store.SORT_NAME) != sortRev
+            val cmp: Comparator<MemoRow> = when (sort) {
+                Store.SORT_CREATED -> compareBy { it.created }
+                Store.SORT_NAME -> Comparator { x, y -> MemoRepo.naturalCompare(x.name.lowercase(), y.name.lowercase()) }
+                else -> compareBy { it.modified }
             }
+            val base = rows.sortedWith(if (asc) cmp else cmp.reversed())
             base.sortedByDescending { it.fav } // sortedBy は安定ソート → お気に入りが最上段
         }
 
@@ -173,9 +177,13 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxSize().background(bg).paperTexture(paper * listAlpha / 255),
             floatingActionButton = {
                 FloatingActionButton(onClick = {
+                    if (creating) return@FloatingActionButton // 連打でファイルが連続作成されるのを防ぐ
+                    creating = true
                     lifecycleScope.launch {
                         val s = withContext(Dispatchers.IO) { MemoRepo.createNew(this@MainActivity) }
-                        if (s != null) openEditor(s.uri)
+                        kotlinx.coroutines.delay(600)
+                        creating = false
+                        if (s != null) openEditor(s.uri, isNew = true)
                         else toast("作成できませんでした")
                     }
                 }) { Text("＋", fontSize = 24.sp) }
@@ -196,13 +204,19 @@ class MainActivity : ComponentActivity() {
                     val sortLabels = listOf(Store.SORT_UPDATED to "更新日時", Store.SORT_CREATED to "作成日時", Store.SORT_NAME to "名前")
                     Box {
                         OutlinedButton(onClick = { sortMenu = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) {
-                            Text((sortLabels.firstOrNull { it.first == sort }?.second ?: "更新日時") + " ▼", color = onBg, style = MaterialTheme.typography.labelMedium)
+                            Text((sortLabels.firstOrNull { it.first == sort }?.second ?: "更新日時") + (if ((sort == Store.SORT_NAME) != sortRev) " ▲" else " ▼"), color = onBg, style = MaterialTheme.typography.labelMedium)
                         }
                         DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                             sortLabels.forEach { (m, l) ->
                                 DropdownMenuItem(
-                                    text = { Text((if (sort == m) "✓ " else "　") + l) },
-                                    onClick = { sort = m; store.sortMode = m; sortMenu = false },
+                                    text = { Text((if (sort == m) (if ((m == Store.SORT_NAME) != sortRev) "▲ " else "▼ ") else "　") + l) },
+                                    onClick = {
+                                        // 選択中の項目をもう一度押すと昇順/降順を入れ替える
+                                        if (sort == m) sortRev = !sortRev else { sort = m; sortRev = false }
+                                        store.sortMode = sort
+                                        store.sortReverse = sortRev
+                                        sortMenu = false
+                                    },
                                 )
                             }
                         }

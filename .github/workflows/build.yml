@@ -3,6 +3,12 @@ name: Build debug APK
 on:
   push:
     branches: [main]
+    # 文書だけの変更ではビルドしない（タグのpushは対象外＝常にビルド）
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '**.txt'
+    tags: ['**']
   workflow_dispatch:
 
 permissions:

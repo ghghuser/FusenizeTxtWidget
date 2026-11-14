@@ -61,7 +61,12 @@ object WidgetRender {
         val read = MemoRepo.readText(ctx, uri)
         val text = read.getOrNull()?.text
         return when {
-            text != null -> if (text.isEmpty()) "（タップして入力）" to true else text.take(MAX_CHARS) to false
+            text != null -> if (text.isEmpty()) {
+                // 中身が空で、自分で付けたタイトルがある時はタイトルを表示（書かれたら中身を表示）
+                val manual = cfg.manualName || Store(ctx).isManual(u)
+                val title = if (manual) MemoRepo.displayName(ctx, uri)?.removeSuffix(".txt")?.removeSuffix(".TXT") else null
+                if (!title.isNullOrBlank()) title to false else "（タップして入力）" to true
+            } else text.take(MAX_CHARS) to false
             !MemoRepo.exists(ctx, uri) -> "ファイルが見つかりません\nタップして再設定" to true
             read.exceptionOrNull() is MemoRepo.EncodingException -> "文字コードの確認が必要です\nタップして開く" to true
             cfg.cachedText.isNotEmpty() -> cfg.cachedText.take(MAX_CHARS) to false

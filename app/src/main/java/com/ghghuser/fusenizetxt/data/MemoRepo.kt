@@ -204,6 +204,34 @@ object MemoRepo {
 
     fun hasNumberPrefix(name: String?): Boolean = numberOf(name) != null
 
+    /** 数字の並びを数値として比べる自然順の比較（1_ < 2_ < 10_） */
+    fun naturalCompare(a: String, b: String): Int {
+        var i = 0
+        var j = 0
+        while (i < a.length && j < b.length) {
+            val ca = a[i]
+            val cb = b[j]
+            if (ca.isDigit() && cb.isDigit()) {
+                var ei = i
+                while (ei < a.length && a[ei].isDigit()) ei++
+                var ej = j
+                while (ej < b.length && b[ej].isDigit()) ej++
+                val na = a.substring(i, ei).trimStart('0')
+                val nb = b.substring(j, ej).trimStart('0')
+                if (na.length != nb.length) return na.length - nb.length
+                val c = na.compareTo(nb)
+                if (c != 0) return c
+                i = ei
+                j = ej
+            } else {
+                if (ca != cb) return ca.compareTo(cb)
+                i++
+                j++
+            }
+        }
+        return (a.length - i) - (b.length - j)
+    }
+
     /** 一覧用の表示タイトル（連番と拡張子を除く） */
     fun displayTitle(name: String): String =
         name.removeSuffix(".txt").removeSuffix(".TXT").replace(numberRegex, "").ifEmpty { name }

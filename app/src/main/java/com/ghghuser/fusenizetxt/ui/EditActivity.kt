@@ -158,10 +158,13 @@ class EditActivity : ComponentActivity() {
     companion object {
         const val EXTRA_URI = "fusen_uri"
         const val EXTRA_PAGE = "fusen_page"
+        const val EXTRA_NEW = "fusen_new" // 一覧の＋で作ったばかりのメモ（空のまま閉じたら削除する）
         private const val FORCE_RESAVE = "\u0000"
     }
 
     private lateinit var store: Store
+    private var isNewMemo = false
+    private var exactWarn by mutableStateOf(false)
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private val uriRef = AtomicReference<Uri?>(null)
 
@@ -198,6 +201,7 @@ class EditActivity : ComponentActivity() {
         store = Store(this)
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         val extraUri = intent.getStringExtra(EXTRA_URI)
+        isNewMemo = intent.getBooleanExtra(EXTRA_NEW, false)
 
         if (widgetMode) {
             val cfg = store.getConfig(widgetId)
@@ -301,6 +305,10 @@ class EditActivity : ComponentActivity() {
         ) notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         com.ghghuser.fusenizetxt.data.Reminders.set(applicationContext, u.toString(), com.ghghuser.fusenizetxt.data.Reminder(at, repeat))
         Toast.makeText(this, "リマインダーを設定しました", Toast.LENGTH_SHORT).show()
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            val am = getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+            if (!am.canScheduleExactAlarms()) exactWarn = true
+        }
     }
 
     private fun clearReminder() {
@@ -378,8 +386,48 @@ class EditActivity : ComponentActivity() {
     }
 
     private fun closeAndSave() {
+        // 新規作成したのに何も入力せず、名前も変えていないなら、空のファイルは残さず削除する
+        if (isNewMemo && loaded && !deleted && text.text.isBlank() && !manualName && widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+            deleteMemo()
+            return
+        }
         saveNow()
         finish()
+    }
+
+    // ---------- 共有 ----------
+
+    private fun shareText() {
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, fileName.removeSuffix(".txt").removeSuffix(".TXT"))
+            .putExtra(Intent.EXTRA_TEXT, text.text)
+        startActivity(Intent.createChooser(send, "共有先を選ぶ"))
+    }
+
+    private fun shareFile() {
+        val t = text.text
+        val name = fileName.ifEmpty { "memo.txt" }
+        lifecycleScope.launch {
+            val uri = withContext(Dispatchers.IO) {
+                try {
+                    val dir = java.io.File(cacheDir, "share").apply { mkdirs() }
+                    dir.listFiles()?.forEach { it.delete() }
+                    val f = java.io.File(dir, name.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
+                    f.writeText(t, Charsets.UTF_8)
+                    androidx.core.content.FileProvider.getUriForFile(this@EditActivity, "$packageName.fileprovider", f)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (uri == null) {
+                Toast.makeText(this@EditActivity, "共有用のファイルを作れませんでした", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(send, "共有先を選ぶ（txtファイル・UTF-8）"))
+        }
     }
 
     private fun renameManually(base: String) {
@@ -604,7 +652,7 @@ class EditActivity : ComponentActivity() {
     @Composable
     private fun EditScreen() {
         var showSettings by remember { mutableStateOf(false) }
-        var lineNumbers by remember { mutableStateOf(store.lineNumbers) }
+        var lineNumbers by remember { mutableStateOf(if (widgetMode) store.lineNumbersWidget else store.lineNumbers) }
         var tl by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
         val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
         val fm = androidx.compose.ui.platform.LocalFocusManager.current
@@ -620,7 +668,7 @@ class EditActivity : ComponentActivity() {
         val appEd = remember { store.editorBgColor ?: store.listBgColor }
         val editorBg = if (widgetMode) Color(rgbToArgb(shownStyle().bgColor)) else appEd?.let { Color(rgbToArgb(it)) } ?: cs.surfaceVariant
         // 設定・ツールバー部分の色は入力欄に近い色で、少し濃いめにする
-        val panelBg = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.18f)
+        val panelBg = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.09f)
         val panelDark = panelBg.luminance() < 0.5f
         val panelFg = if (panelDark) Color(0xFFF2F2F2) else Color(0xFF212121)
         val panelScheme = tintedScheme(panelBg)
@@ -701,12 +749,12 @@ class EditActivity : ComponentActivity() {
                     // 1段目: ファイル名 / 画面オン / メニュー / 閉じる
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            (if (manualName) "🐾 " else "🌱 ") + fileName.ifEmpty { "…" } +
+                            (if (manualName) "🐾 " else "🌱 ") + fileName.removeSuffix(".txt").removeSuffix(".TXT").ifEmpty { "…" } +
                                 (if (charsetName != "UTF-8") "  [" + (MemoRepo.ENCODINGS.firstOrNull { it.first == charsetName }?.second ?: charsetName) + "]" else ""),
                             modifier = Modifier.weight(1f).clickable {
                                 renameText = fileName.removeSuffix(".txt")
                                 dlg = Dlg.RENAME
-                            }.padding(horizontal = 8.dp, vertical = 6.dp),
+                            }.padding(horizontal = 8.dp, vertical = 2.dp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleSmall,
@@ -716,39 +764,39 @@ class EditActivity : ComponentActivity() {
                             IconButton(onClick = {
                                 applyKeepOn(false)
                                 Toast.makeText(this@EditActivity, "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
-                            }, modifier = Modifier.size(40.dp)) { Text("🔆") }
+                            }, modifier = Modifier.size(34.dp)) { Text("🔆") }
                         }
                         Box {
-                            IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) { Text("⋮") }
+                            IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(34.dp)) { Text("⋮", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(text = { Text((if (keepOn) "🌙 画面を自動消灯に戻す" else "🔆 画面を点灯したままにする")) }, onClick = {
+                                CompactMenuItem(text = { Text((if (keepOn) "🌙 画面を自動消灯に戻す" else "🔆 画面を点灯したままにする")) }, onClick = {
                                     menuOpen = false
                                     applyKeepOn(!keepOn)
                                     Toast.makeText(this@EditActivity, if (keepOn) "編集中は画面を消さないようにしました" else "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
                                 })
-                                DropdownMenuItem(text = { Text("📋 一覧を開く") }, onClick = {
-                                    menuOpen = false
-                                    closeAndSave()
-                                    startActivity(Intent(this@EditActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                })
                                 if (widgetMode) {
-                                    DropdownMenuItem(text = { Text(if (showSettings) "⚙ 設定を閉じる" else "⚙ ウィジェットの設定") }, onClick = {
+                                    CompactMenuItem(text = { Text(if (showSettings) "⚙ 設定を閉じる" else "⚙ ウィジェットの設定") }, onClick = {
                                         menuOpen = false
                                         showSettings = !showSettings
                                     })
                                 }
-                                DropdownMenuItem(text = { Text("ファイル名を変更") }, onClick = {
+                                CompactMenuItem(text = { Text("📋 一覧を開く") }, onClick = {
+                                    menuOpen = false
+                                    closeAndSave()
+                                    startActivity(Intent(this@EditActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                })
+                                CompactMenuItem(text = { Text("ファイル名を変更") }, onClick = {
                                     menuOpen = false
                                     renameText = fileName.removeSuffix(".txt")
                                     dlg = Dlg.RENAME
                                 })
                                 if (manualName) {
-                                    DropdownMenuItem(text = { Text("ファイル名を自動に戻す") }, onClick = {
+                                    CompactMenuItem(text = { Text("ファイル名を自動に戻す") }, onClick = {
                                         menuOpen = false
                                         backToAutoName()
                                     })
                                 }
-                                DropdownMenuItem(text = { Text("リマインダー") }, onClick = {
+                                CompactMenuItem(text = { Text("リマインダー") }, onClick = {
                                     menuOpen = false
                                     val cur = uriRef.get()?.let { com.ghghuser.fusenizetxt.data.Reminders.get(applicationContext, it.toString()) }
                                     remAt = cur?.time?.takeIf { it > System.currentTimeMillis() } ?: (System.currentTimeMillis() / 3600000 + 1) * 3600000
@@ -756,22 +804,30 @@ class EditActivity : ComponentActivity() {
                                     remExists = cur != null
                                     dlg = Dlg.REMIND
                                 })
-                                DropdownMenuItem(text = { Text("履歴") }, onClick = {
+                                CompactMenuItem(text = { Text("📤 共有（テキスト）") }, onClick = {
+                                    menuOpen = false
+                                    shareText()
+                                })
+                                CompactMenuItem(text = { Text("📤 共有（txtファイル）") }, onClick = {
+                                    menuOpen = false
+                                    shareFile()
+                                })
+                                CompactMenuItem(text = { Text("履歴") }, onClick = {
                                     menuOpen = false
                                     openHistory()
                                     dlg = Dlg.HISTORY
                                 })
                                 if (charsetName != "UTF-8") {
-                                    DropdownMenuItem(text = { Text("UTF-8に変換して保存") }, onClick = {
+                                    CompactMenuItem(text = { Text("UTF-8に変換して保存") }, onClick = {
                                         menuOpen = false
                                         convertCurrent()
                                     })
                                 }
-                                DropdownMenuItem(text = { Text("メモをクリア") }, onClick = {
+                                CompactMenuItem(text = { Text("メモをクリア") }, onClick = {
                                     menuOpen = false
                                     dlg = Dlg.CLEAR
                                 })
-                                DropdownMenuItem(text = { Text("このメモを削除") }, onClick = {
+                                CompactMenuItem(text = { Text("このメモを削除") }, onClick = {
                                     menuOpen = false
                                     dlg = Dlg.DELETE
                                 })
@@ -781,15 +837,15 @@ class EditActivity : ComponentActivity() {
                     // 2段目: ツールバー（右端に閉じる）
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
-                            TextButton(onClick = { doUndo() }, enabled = undoMgr.canUndo) { Text("↺ 戻す") }
-                            TextButton(onClick = { doRedo() }, enabled = undoMgr.canRedo) { Text("↻ やり直し") }
-                            TextButton(onClick = { toggleCheckbox() }) { Text("☑ チェック") }
-                            TextButton(onClick = {
+                            ToolBtn(onClick = { doUndo() }, enabled = undoMgr.canUndo) { Text("↺ 戻す") }
+                            ToolBtn(onClick = { doRedo() }, enabled = undoMgr.canRedo) { Text("↻ やり直し") }
+                            ToolBtn(onClick = { toggleCheckbox() }) { Text("☑ チェック") }
+                            ToolBtn(onClick = {
                                 lineNumbers = !lineNumbers
-                                store.lineNumbers = lineNumbers
+                                if (widgetMode) store.lineNumbersWidget = lineNumbers else store.lineNumbers = lineNumbers
                             }) { Text("# 行番号", color = if (lineNumbers) cs.primary else Color.Unspecified) }
                         }
-                        IconButton(onClick = { closeAndSave() }, modifier = Modifier.size(40.dp)) { Text("✓") }
+                        IconButton(onClick = { closeAndSave() }, modifier = Modifier.size(34.dp)) { Text("✓") }
                     }
                     HorizontalDivider()
                     // 本文
@@ -841,7 +897,11 @@ class EditActivity : ComponentActivity() {
                             }
                             if (lineNumbers) {
                                 Row(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                                    Box(Modifier.width(34.dp)) {
+                                    val digits = (text.text.count { it == '\n' } + 1).toString().length
+                                    val numW = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                        ((if (widgetMode) style.editSizeSp else 16) * 0.62f * digits).sp.toDp()
+                                    } + 8.dp
+                                    Box(Modifier.width(numW)) {
                                         val lay = tl
                                         val str = text.text
                                         if (lay != null) {
@@ -854,7 +914,7 @@ class EditActivity : ComponentActivity() {
                                                     val top = lay.getLineTop(ln)
                                                     Text(
                                                         "${idx + 1}",
-                                                        modifier = Modifier.width(28.dp).offset { androidx.compose.ui.unit.IntOffset(0, top.toInt()) },
+                                                        modifier = Modifier.width(numW - 4.dp).offset { androidx.compose.ui.unit.IntOffset(0, top.toInt()) },
                                                         textAlign = TextAlign.End,
                                                         maxLines = 1,
                                                         softWrap = false,
@@ -894,6 +954,25 @@ class EditActivity : ComponentActivity() {
                 }
             }
             }
+        }
+
+        if (exactWarn) {
+            AlertDialog(
+                onDismissRequest = { exactWarn = false },
+                title = { Text("通知が数分ずれることがあります") },
+                text = { Text("この端末では「アラームとリマインダー」の許可がないため、通知が指定時刻から数分ずれることがあります。時刻どおりに通知したい場合は、設定で許可してください。") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        exactWarn = false
+                        try {
+                            startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).setData(android.net.Uri.parse("package:$packageName")))
+                        } catch (e: Exception) {
+                            Toast.makeText(this@EditActivity, "設定画面を開けませんでした", Toast.LENGTH_SHORT).show()
+                        }
+                    }) { Text("設定を開く") }
+                },
+                dismissButton = { TextButton(onClick = { exactWarn = false }) { Text("このまま") } },
+            )
         }
 
         histPick?.let { h ->
@@ -1044,4 +1123,24 @@ class EditActivity : ComponentActivity() {
             )
         }
     }
+}
+
+/** 少し間隔を詰めたメニュー項目 */
+@Composable
+private fun CompactMenuItem(text: @Composable () -> Unit, onClick: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 9.dp),
+    ) { text() }
+}
+
+/** 薄めのツールバーボタン */
+@Composable
+private fun ToolBtn(onClick: () -> Unit, enabled: Boolean = true, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        modifier = Modifier.height(30.dp),
+        content = content,
+    )
 }

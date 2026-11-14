@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -300,13 +301,13 @@ class SettingsActivity : ComponentActivity() {
                 }
                 if (bkOn) {
                     Text("間隔", style = MaterialTheme.typography.labelLarge)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(1, 3, 6, 12, 24).forEach { h ->
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(1, 3, 6, 12, 24, 168, 720).forEach { h ->
                             FilterChip(selected = bkHours == h, onClick = {
                                 bkHours = h
                                 store.backupHours = h
                                 Backup.schedule(this@SettingsActivity, replace = true)
-                            }, label = { Text("${h}時間") })
+                            }, label = { Text(when (h) { 168 -> "1週間"; 720 -> "1か月"; else -> "${h}時間" }) })
                         }
                     }
                     SliderRow("残す個数（古いものから自動削除・最大100）", bkKeep, 1, 100) {

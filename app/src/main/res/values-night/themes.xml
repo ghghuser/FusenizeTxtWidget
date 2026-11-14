@@ -3,7 +3,9 @@
     <style name="Theme.Fusen" parent="android:Theme.Material.NoActionBar" />
 
     <style name="Theme.Fusen.Main" parent="Theme.Fusen">
-        <item name="android:windowIsTranslucent">true</item>
+        <!-- ホームの壁紙の上に、指定した色と透明度のレイヤーを重ねる（ランチャー等は透けない） -->
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowBackground">@android:color/transparent</item>
     </style>
 

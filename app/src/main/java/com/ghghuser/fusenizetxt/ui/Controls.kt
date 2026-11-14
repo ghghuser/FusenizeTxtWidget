@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,32 +50,42 @@ fun SliderRow(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> 
     }
 }
 
-/** プリセット + 自由入力（#RRGGBB / RGBスライダー）による色選択 */
+/** プリセット（7色ずつの段）＋ 右端の虹色の丸（自由に選ぶ）による色選択 */
 @Composable
 fun ColorPickerRow(label: String, rgb: Int, presets: List<Int>, onChange: (Int) -> Unit) {
     var custom by remember { mutableStateOf(false) }
     var hex by remember(rgb) { mutableStateOf("%06X".format(rgb and 0xFFFFFF)) }
+    val rainbow = Brush.sweepGradient(
+        listOf(Color.Red, Color(0xFFFFA000), Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
+    )
     Column(Modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.labelLarge)
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            presets.forEach { p ->
-                val selected = (p and 0xFFFFFF) == (rgb and 0xFFFFFF)
-                Box(
-                    Modifier.size(32.dp).clip(CircleShape)
-                        .background(Color(rgbToArgb(p)))
-                        .border(
-                            if (selected) 3.dp else 1.dp,
-                            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                            CircleShape,
-                        )
-                        .clickable { onChange(p) }
-                )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                presets.chunked(7).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { p ->
+                            val selected = (p and 0xFFFFFF) == (rgb and 0xFFFFFF)
+                            Box(
+                                Modifier.size(30.dp).clip(CircleShape)
+                                    .background(Color(rgbToArgb(p)))
+                                    .border(
+                                        if (selected) 3.dp else 1.dp,
+                                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                        CircleShape,
+                                    )
+                                    .clickable { onChange(p) }
+                            )
+                        }
+                    }
+                }
             }
-            TextButton(onClick = { custom = !custom }) { Text(if (custom) "閉じる" else "自由に選ぶ") }
+            Box(
+                Modifier.padding(start = 8.dp).size(44.dp).clip(CircleShape)
+                    .background(rainbow)
+                    .border(if (custom) 3.dp else 1.dp, if (custom) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape)
+                    .clickable { custom = !custom },
+            )
         }
         if (custom) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -102,5 +114,9 @@ fun ColorPickerRow(label: String, rgb: Int, presets: List<Int>, onChange: (Int) 
     }
 }
 
-val BG_PRESETS = listOf(0x1B2A5E, 0xFFF59D, 0xFFCCBC, 0xC8E6C9, 0xBBDEFB, 0xE1BEE7, 0xFFFFFF, 0x424242, 0x000000)
+/** 上段: パステル系（文字色は黒系）／下段: 濃い系（文字色は白系） */
+val BG_PRESETS = listOf(
+    0xFFF59D, 0xFFCCBC, 0xC8E6C9, 0xBBDEFB, 0xE1BEE7, 0xF8BBD0, 0xB2EBF2,
+    0x1B2A5E, 0x3B1F4A, 0x4A1F1F, 0x1F4A3A, 0x37474F, 0x2B2B2B, 0x4E342E,
+)
 val TEXT_PRESETS = listOf(0x212121, 0xFFFFFF, 0xB71C1C, 0x0D47A1, 0x1B5E20, 0x4E342E)

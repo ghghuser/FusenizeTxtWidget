@@ -208,7 +208,7 @@ class Store(ctx: Context) {
     var backupHours: Int
         get() = sp.getInt("bk_h", 24)
         set(v) {
-            sp.edit().putInt("bk_h", v.coerceIn(1, 168)).apply()
+            sp.edit().putInt("bk_h", v.coerceIn(1, 720)).apply()
         }
 
     /** 残す個数（1〜100）。古いものから自動で削除 */
@@ -318,4 +318,18 @@ class Store(ctx: Context) {
             sp.edit().putStringSet("manualNames", if (on) cur + uri else cur - uri).apply()
         }
     }
+
+    /** 並び順の向きを既定から反転するか（日時は新しい順、名前は昇順が既定） */
+    var sortReverse: Boolean
+        get() = sp.getBoolean("sortRev", false)
+        set(v) {
+            sp.edit().putBoolean("sortRev", v).apply()
+        }
+
+    /** ウィジェットの編集画面での行番号表示（アプリ側は lineNumbers） */
+    var lineNumbersWidget: Boolean
+        get() = sp.getBoolean("lineNoW", false)
+        set(v) {
+            sp.edit().putBoolean("lineNoW", v).apply()
+        }
 }
