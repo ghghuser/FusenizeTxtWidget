@@ -146,7 +146,7 @@ class UndoManager {
     }
 }
 
-private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY, REMIND }
+private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY, REMIND, BRIGHT }
 
 private data class HistItem(val v: History.Version, val preview: String)
 
@@ -767,7 +767,7 @@ class EditActivity : ComponentActivity() {
                             }, modifier = Modifier.size(34.dp)) { Text("🔆") }
                         }
                         Box {
-                            IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(34.dp)) { Text("⋮", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
+                            IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(34.dp)) { Text("⋮", fontSize = 26.sp, fontWeight = FontWeight.Normal) }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                                 CompactMenuItem(text = { Text((if (keepOn) "🌙 画面を自動消灯に戻す" else "🔆 画面を点灯したままにする")) }, onClick = {
                                     menuOpen = false
@@ -780,6 +780,22 @@ class EditActivity : ComponentActivity() {
                                         showSettings = !showSettings
                                     })
                                 }
+                                if (widgetMode) {
+                                    CompactMenuItem(text = { Text("🔁 表示するメモを変更") }, onClick = {
+                                        menuOpen = false
+                                        saveNow()
+                                        startActivity(
+                                            Intent(this@EditActivity, ConfigActivity::class.java)
+                                                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                                                .putExtra(EXTRA_PAGE, page)
+                                        )
+                                        finish()
+                                    })
+                                }
+                                CompactMenuItem(text = { Text("🔅 画面の明るさ") }, onClick = {
+                                    menuOpen = false
+                                    dlg = Dlg.BRIGHT
+                                })
                                 CompactMenuItem(text = { Text("📋 一覧を開く") }, onClick = {
                                     menuOpen = false
                                     closeAndSave()
@@ -1048,6 +1064,33 @@ class EditActivity : ComponentActivity() {
                     }) { Text("クリア") }
                 },
                 dismissButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") } },
+            )
+            Dlg.BRIGHT -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("画面の明るさ") },
+                text = {
+                    Column {
+                        var brOn by remember { mutableStateOf(store.brightnessLock) }
+                        var brLv by remember { mutableStateOf(store.brightnessLevel) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("アプリ画面を指定の明るさに固定", Modifier.weight(1f))
+                            androidx.compose.material3.Switch(checked = brOn, onCheckedChange = {
+                                brOn = it
+                                store.brightnessLock = it
+                                com.ghghuser.fusenizetxt.data.Brightness.apply(this@EditActivity)
+                            })
+                        }
+                        if (brOn) {
+                            SliderRow("明るさ（%）", brLv, 5, 100) {
+                                brLv = it
+                                store.brightnessLevel = it
+                                com.ghghuser.fusenizetxt.data.Brightness.apply(this@EditActivity)
+                            }
+                        }
+                        Text("このアプリを開いている間だけ有効です。", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
+                confirmButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("閉じる") } },
             )
             Dlg.REMIND -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },

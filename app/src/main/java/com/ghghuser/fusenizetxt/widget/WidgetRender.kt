@@ -65,7 +65,7 @@ object WidgetRender {
                 // 中身が空で、自分で付けたタイトルがある時はタイトルを表示（書かれたら中身を表示）
                 val manual = cfg.manualName || Store(ctx).isManual(u)
                 val title = if (manual) MemoRepo.displayName(ctx, uri)?.removeSuffix(".txt")?.removeSuffix(".TXT") else null
-                if (!title.isNullOrBlank()) title to false else "（タップして入力）" to true
+                if (!title.isNullOrBlank() && !cfg.styleFor(cfg.cur).showTitle) title to false else "（タップして入力）" to true
             } else text.take(MAX_CHARS) to false
             !MemoRepo.exists(ctx, uri) -> "ファイルが見つかりません\nタップして再設定" to true
             read.exceptionOrNull() is MemoRepo.EncodingException -> "文字コードの確認が必要です\nタップして開く" to true
@@ -122,6 +122,24 @@ object WidgetRender {
         rv.setTextViewTextSize(tid, TypedValue.COMPLEX_UNIT_SP, s.textSizeSp.toFloat())
         rv.setTextColor(tid, fg)
 
+        // 上部のタイトル（ファイル名）。ウィジェットの設定でオン/オフ・文字サイズを指定
+        val titleStr = if (s.showTitle && cfg.fileUri != null) {
+            val uu = Uri.parse(cfg.fileUri)
+            val nm = MemoRepo.displayName(ctx, uu)
+            nm?.let { MemoRepo.shownTitle(it, cfg.manualName || Store(ctx).isManual(cfg.fileUri!!)) }
+        } else null
+        if (!titleStr.isNullOrBlank()) {
+            val ts = SpannableString(titleStr)
+            ts.setSpan(StyleSpan(Typeface.BOLD), 0, ts.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            rv.setViewVisibility(R.id.w_title, View.VISIBLE)
+            rv.setTextViewText(R.id.w_title, ts)
+            rv.setTextViewTextSize(R.id.w_title, TypedValue.COMPLEX_UNIT_SP, s.titleSizeSp.toFloat())
+            rv.setTextColor(R.id.w_title, rgbToArgb(fgRgb))
+            rv.setInt(R.id.w_title, "setGravity", when (s.hAlign) { 1 -> android.view.Gravity.CENTER_HORIZONTAL; 2 -> android.view.Gravity.END; else -> android.view.Gravity.START })
+        } else {
+            rv.setViewVisibility(R.id.w_title, View.GONE)
+        }
+
         // 垂直配置: 上下のスペーサー（重み付き）の表示/非表示で上・中央・下を作る
         rv.setViewVisibility(R.id.w_v_top, if (s.vAlign == 0) View.GONE else View.VISIBLE)
         rv.setViewVisibility(R.id.w_v_bottom, if (s.vAlign == 2) View.GONE else View.VISIBLE)
@@ -150,11 +168,15 @@ object WidgetRender {
             }
             val on = i == page
             val tabBg = cfg.styleFor(i).bgColor
+            val tabStyle = cfg.styleFor(i)
+            val padPx = px(((s.tabHeightDp - 15) / 2).coerceAtLeast(0))
+            rv.setViewPadding(TABT_IDS[i], 0, padPx, 0, padPx)
             val label = SpannableString("${i + 1}")
             if (on) label.setSpan(StyleSpan(Typeface.BOLD), 0, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             rv.setViewVisibility(tab, View.VISIBLE)
             rv.setTextViewText(TABT_IDS[i], label)
-            rv.setTextColor(TABT_IDS[i], rgbToArgb(contrastTextRgb(tabBg), if (on) 255 else 190))
+            // タブの背景は、対応するページのウィジェット背景（色・透過度）と同じ。選択中は太字で示す
+            rv.setTextColor(TABT_IDS[i], rgbToArgb(contrastTextRgb(tabBg), if (on) 255 else 170))
             // 最初のタブは左下、最後のタブは右下だけ丸く（メモ本体の形とつなげる）
             rv.setImageViewResource(
                 TABB_IDS[i],
@@ -166,7 +188,7 @@ object WidgetRender {
                 },
             )
             rv.setInt(TABB_IDS[i], "setColorFilter", rgbToArgb(tabBg))
-            rv.setInt(TABB_IDS[i], "setImageAlpha", if (on) 255 else 130)
+            rv.setInt(TABB_IDS[i], "setImageAlpha", tabStyle.bgAlpha.coerceIn(0, 255))
             val sw = Intent(ctx, PageSwitchReceiver::class.java).apply {
                 action = ACTION_PAGE
                 data = Uri.parse("fusen://page/$id/$i")

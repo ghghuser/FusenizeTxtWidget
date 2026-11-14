@@ -27,8 +27,8 @@ fun StylePanel(
     onChange: (WidgetStyle) -> Unit,
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         if (pageNo + 1 < MAX_PAGES) {
             SliderRow("ページ数（2以上で最下段にページ切替）", pageCount, pageNo + 1, MAX_PAGES) { onPageCount(it) }
@@ -42,23 +42,35 @@ fun StylePanel(
         ) { onChange(style.copy(bgColor = it)) }
         SliderRow("背景の透過度（255=不透明、初期値200）", style.bgAlpha, 0, 255) { onChange(style.copy(bgAlpha = it)) }
         HorizontalDivider()
+        Text("文字色", style = MaterialTheme.typography.labelLarge)
         FilterChip(
             selected = style.autoText,
             onClick = { onChange(style.copy(autoText = !style.autoText)) },
-            label = { Text("文字色を背景に合わせて自動で決める") },
+            label = { Text("背景に合わせて自動で決める") },
         )
         if (!style.autoText) {
             ColorPickerRow("文字色", style.textColor, TEXT_PRESETS) { onChange(style.copy(textColor = it)) }
         }
         SliderRow("ウィジェットの文字サイズ (sp)", style.textSizeSp, 12, 32) { onChange(style.copy(textSizeSp = it)) }
         SliderRow("編集画面の文字サイズ (sp)", style.editSizeSp, 12, 32) { onChange(style.copy(editSizeSp = it)) }
+        FilterChip(
+            selected = style.showTitle,
+            onClick = { onChange(style.copy(showTitle = !style.showTitle)) },
+            label = { Text("ウィジェット上部にタイトルを表示") },
+        )
+        if (style.showTitle) {
+            SliderRow("タイトルの文字サイズ (sp)", style.titleSizeSp, 8, 32) { onChange(style.copy(titleSizeSp = it)) }
+        }
+        if (pageCount > 1) {
+            SliderRow("ページ切替バーの高さ (dp)", style.tabHeightDp, 14, 48) { onChange(style.copy(tabHeightDp = it)) }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = style.bold, onClick = { onChange(style.copy(bold = !style.bold)) }, label = { Text("太字") })
-            FilterChip(selected = style.paper, onClick = { onChange(style.copy(paper = !style.paper)) }, label = { Text("紙の質感") })
+            FilterChip(selected = style.paper, onClick = { onChange(style.copy(paper = !style.paper)) }, label = { Text("背景の質感") })
             FilterChip(selected = style.italic, onClick = { onChange(style.copy(italic = !style.italic)) }, label = { Text("斜体") })
         }
         if (style.paper) {
-            SliderRow("質感の強さ（紙のノイズ・グラデーション）", style.paperStrength, 0, 100) { onChange(style.copy(paperStrength = it)) }
+            SliderRow("質感の強さ（ノイズ・グラデーション）", style.paperStrength, 0, 100) { onChange(style.copy(paperStrength = it)) }
         }
         HorizontalDivider()
         Text("水平配置", style = MaterialTheme.typography.labelLarge)

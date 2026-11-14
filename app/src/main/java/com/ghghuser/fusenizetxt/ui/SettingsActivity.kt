@@ -136,16 +136,35 @@ class SettingsActivity : ComponentActivity() {
         var listAlpha by remember { mutableIntStateOf(store.listBgAlpha) }
         var busy by remember { mutableStateOf(false) }
 
+        var moveAsk by remember { mutableStateOf<kotlinx.coroutines.CompletableDeferred<Boolean>?>(null) }
+        var moveCount by remember { mutableIntStateOf(0) }
         val treePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
-                if (persistTreeUri(this, uri)) {
-                    storage = MemoRepo.storageLabel(this)
-                    lifecycleScope.launch {
-                        val r = Importer.migrateDefault(applicationContext) { n, rem -> importer.askConflict(n, rem) }
-                        if (r != null) toast(r.describe("移動"))
+                lifecycleScope.launch {
+                    val app = applicationContext
+                    val wasTree = MemoRepo.usingTree(app)
+                    // 変更前の保存先にあるメモ（フォルダを切り替えた後も、元のフォルダの権限は残るので読み書きできる）
+                    val oldList = if (wasTree) withContext(Dispatchers.IO) { MemoRepo.listTxt(app) } else emptyList()
+                    if (persistTreeUri(this@SettingsActivity, uri)) {
+                        storage = MemoRepo.storageLabel(this@SettingsActivity)
+                        if (wasTree) {
+                            if (oldList.isNotEmpty()) {
+                                moveCount = oldList.size
+                                val d = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                                moveAsk = d
+                                if (d.await()) {
+                                    val items = withContext(Dispatchers.IO) { oldList.mapNotNull { Importer.readItem(app, it.uri) } }
+                                    val r = Importer.run(app, items, true) { n, rem -> importer.askConflict(n, rem) }
+                                    toast(r.describe("移動"))
+                                }
+                            }
+                        } else {
+                            val r = Importer.migrateDefault(app) { n, rem -> importer.askConflict(n, rem) }
+                            if (r != null) toast(r.describe("移動"))
+                        }
+                    } else {
+                        toast("フォルダの権限を保持できませんでした")
                     }
-                } else {
-                    toast("フォルダの権限を保持できませんでした")
                 }
             }
         }
@@ -227,7 +246,7 @@ class SettingsActivity : ComponentActivity() {
                     store.listBgColor = it
                 }
                 var appPaper by remember { mutableIntStateOf(store.appPaper) }
-                SliderRow("紙の質感の強さ（一覧・編集欄。0でなし）", appPaper, 0, 100) {
+                SliderRow("質感の強さ（ノイズ。一覧・編集欄。0でなし）", appPaper, 0, 100) {
                     appPaper = it
                     store.appPaper = it
                 }
@@ -350,6 +369,15 @@ class SettingsActivity : ComponentActivity() {
                 Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
             }
         }
+        }
+        moveAsk?.let { d ->
+            AlertDialog(
+                onDismissRequest = { moveAsk = null; d.complete(false) },
+                title = { Text("元の保存先のメモも移動しますか？") },
+                text = { Text("これまでの保存先にある ${moveCount} 件のtxtを、新しい保存先へ移動します（元の場所からは削除され、ウィジェットや履歴などの紐付けは引き継がれます）。「移動しない」を選ぶと、元のファイルはそのまま残ります。") },
+                confirmButton = { TextButton(onClick = { moveAsk = null; d.complete(true) }) { Text("移動する") } },
+                dismissButton = { TextButton(onClick = { moveAsk = null; d.complete(false) }) { Text("移動しない") } },
+            )
         }
         ConflictDialog(importer)
     }

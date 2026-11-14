@@ -80,11 +80,12 @@ private data class MemoRow(
     val created: Long,
     val fav: Boolean,
     val manual: Boolean,
+    val size: Long,
 )
 
 /** アプリアイコンから起動した時の一覧画面（開いたファイル / フォルダ内） */
 class MainActivity : ComponentActivity() {
-    private val dateFmt = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
+    private val dateFmt = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault())
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -98,24 +99,30 @@ class MainActivity : ComponentActivity() {
         com.ghghuser.fusenizetxt.data.Brightness.apply(this)
     }
 
+    private var lastOpen = 0L
+
     private fun openEditor(uri: Uri, isNew: Boolean = false) {
+        // 反応が遅い時の連続タップで編集画面が重なって開くのを防ぐ
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastOpen < 1200) return
+        lastOpen = now
         startActivity(Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()).putExtra(EditActivity.EXTRA_NEW, isNew))
     }
 
     private fun loadRows(store: Store, tab: Int): List<MemoRow> {
         val fav = store.favorites()
         val man = store.manualSet()
-        fun make(uri: Uri, name: String, mod: Long): MemoRow {
+        fun make(uri: Uri, name: String, mod: Long, size: Long): MemoRow {
             val key = uri.toString()
-            return MemoRow(uri, name, mod, store.createdAt(key) ?: mod, key in fav, key in man || !MemoRepo.hasNumberPrefix(name))
+            return MemoRow(uri, name, mod, store.createdAt(key) ?: mod, key in fav, key in man || !MemoRepo.hasNumberPrefix(name), size)
         }
         return if (tab == 1) {
-            MemoRepo.listTxt(this).map { make(it.uri, it.name, it.lastModified) }
+            MemoRepo.listTxt(this).map { make(it.uri, it.name, it.lastModified, it.size) }
         } else {
             store.recents().mapNotNull { u ->
                 val uri = Uri.parse(u)
                 val name = MemoRepo.displayName(this, uri) ?: return@mapNotNull null
-                make(uri, name, MemoRepo.lastModified(this, uri))
+                make(uri, name, MemoRepo.lastModified(this, uri), MemoRepo.size(this, uri))
             }
         }
     }
@@ -146,6 +153,11 @@ class MainActivity : ComponentActivity() {
                     listAlpha = store.listBgAlpha
                     paper = store.appPaper
                     tick++
+                    // 直前の編集画面の保存・改名が少し遅れて終わる場合に備えて、もう一度読み直す
+                    lifecycleScope.launch {
+                        kotlinx.coroutines.delay(800)
+                        tick++
+                    }
                 }
             }
             owner.lifecycle.addObserver(obs)
@@ -153,7 +165,8 @@ class MainActivity : ComponentActivity() {
         }
 
         LaunchedEffect(tab, tick, storage) {
-            rows = withContext(Dispatchers.IO) { loadRows(store, tab) }
+            // 保存（名前の変更を含む）の完了を待ってから読み込む
+            rows = FusenApp.saveMutex.withLock { withContext(Dispatchers.IO) { loadRows(store, tab) } }
         }
 
         val sorted = remember(rows, sort, sortRev) {
@@ -275,11 +288,18 @@ class MainActivity : ComponentActivity() {
                                     Text(
                                         (if (r.uri.toString() in selected) "☑ " else if (selected.isNotEmpty()) "☐ " else "") +
                                             (if (r.manual) "🐾 " else "🌱 ") +
-                                            (if (r.manual && MemoRepo.hasNumberPrefix(r.name)) r.name.removeSuffix(".txt").removeSuffix(".TXT") else MemoRepo.displayTitle(r.name)),
+                                            MemoRepo.shownTitle(r.name, r.manual),
                                         maxLines = 1, overflow = TextOverflow.Ellipsis, color = onBg, style = MaterialTheme.typography.bodyLarge)
-                                    if (r.modified > 0) {
+                                    Row(Modifier.fillMaxWidth()) {
                                         Text(
-                                            dateFmt.format(Date(r.modified)),
+                                            if (r.modified > 0) dateFmt.format(Date(r.modified)) else "",
+                                            modifier = Modifier.weight(1f),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = onBg.copy(alpha = 0.5f),
+                                        )
+                                        Text(
+                                            MemoRepo.formatSize(r.size),
+                                            modifier = Modifier.padding(end = 8.dp),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = onBg.copy(alpha = 0.5f),
                                         )

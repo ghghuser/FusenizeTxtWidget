@@ -34,7 +34,7 @@ object MemoRepo {
     private val numberRegex = Regex("^(\\d+)_")
     private val badChars = Regex("[\\\\/:*?\"<>|\\p{Cntrl}]")
 
-    data class Entry(val uri: Uri, val name: String, val lastModified: Long)
+    data class Entry(val uri: Uri, val name: String, val lastModified: Long, val size: Long = -1)
     data class Saved(val uri: Uri, val name: String)
     data class FileText(val text: String, val crlf: Boolean)
     data class SaveOutcome(val saved: Saved?, val encodeError: Boolean = false)
@@ -78,7 +78,7 @@ object MemoRepo {
     private fun listDir(dir: File): List<Entry> = try {
         (dir.listFiles() ?: emptyArray())
             .filter { it.isFile && it.name.endsWith(".txt", ignoreCase = true) }
-            .map { Entry(Uri.fromFile(it), it.name, it.lastModified()) }
+            .map { Entry(Uri.fromFile(it), it.name, it.lastModified(), it.length()) }
     } catch (e: Exception) {
         emptyList()
     }
@@ -164,7 +164,7 @@ object MemoRepo {
         return try {
             dir.listFiles().mapNotNull { f ->
                 val n = f.name ?: return@mapNotNull null
-                if (f.isFile && n.endsWith(".txt", ignoreCase = true)) Entry(f.uri, n, f.lastModified()) else null
+                if (f.isFile && n.endsWith(".txt", ignoreCase = true)) Entry(f.uri, n, f.lastModified(), f.length()) else null
             }
         } catch (e: Exception) {
             emptyList()
@@ -178,6 +178,7 @@ object MemoRepo {
                 MediaStore.MediaColumns._ID,
                 MediaStore.MediaColumns.DISPLAY_NAME,
                 MediaStore.MediaColumns.DATE_MODIFIED,
+                MediaStore.MediaColumns.SIZE,
             )
             ctx.contentResolver.query(
                 filesUri, proj, "${MediaStore.MediaColumns.RELATIVE_PATH} = ?", arrayOf(relPath(ctx)), null
@@ -185,7 +186,7 @@ object MemoRepo {
                 while (c.moveToNext()) {
                     val n = c.getString(1) ?: continue
                     if (!n.endsWith(".txt", ignoreCase = true)) continue
-                    out.add(Entry(ContentUris.withAppendedId(filesUri, c.getLong(0)), n, c.getLong(2) * 1000))
+                    out.add(Entry(ContentUris.withAppendedId(filesUri, c.getLong(0)), n, c.getLong(2) * 1000, c.getLong(3)))
                 }
             }
         } catch (e: Exception) {
@@ -315,6 +316,25 @@ object MemoRepo {
         else DocumentFile.fromSingleUri(ctx, uri)?.lastModified() ?: 0L
     } catch (e: Exception) {
         0L
+    }
+
+    fun size(ctx: Context, uri: Uri): Long = try {
+        if (isLocal(uri)) File(uri.path ?: "").length()
+        else if (isMedia(uri)) queryMediaLong(ctx, uri, MediaStore.MediaColumns.SIZE) ?: -1L
+        else DocumentFile.fromSingleUri(ctx, uri)?.length() ?: -1L
+    } catch (e: Exception) {
+        -1L
+    }
+
+    /** 一覧・ウィジェット用の表示タイトル。自分で付けた名前なら「数字_」も含めて見せる */
+    fun shownTitle(name: String, manual: Boolean): String =
+        if (manual && hasNumberPrefix(name)) name.removeSuffix(".txt").removeSuffix(".TXT") else displayTitle(name)
+
+    fun formatSize(b: Long): String = when {
+        b < 0 -> ""
+        b < 1024 -> "$b B"
+        b < 1024 * 1024 -> "%.1f KB".format(b / 1024.0)
+        else -> "%.1f MB".format(b / 1024.0 / 1024.0)
     }
 
     fun exists(ctx: Context, uri: Uri): Boolean = try {

@@ -62,7 +62,7 @@ fun ColorPickerRow(label: String, rgb: Int, presets: List<Int>, onChange: (Int) 
         Text(label, style = MaterialTheme.typography.labelLarge)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                presets.chunked(7).forEach { row ->
+                presets.chunked(8).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { p ->
                             val selected = (p and 0xFFFFFF) == (rgb and 0xFFFFFF)
@@ -116,7 +116,7 @@ fun ColorPickerRow(label: String, rgb: Int, presets: List<Int>, onChange: (Int) 
 
 /** 上段: パステル系（文字色は黒系）／下段: 濃い系（文字色は白系） */
 val BG_PRESETS = listOf(
-    0xFFF59D, 0xFFCCBC, 0xC8E6C9, 0xBBDEFB, 0xE1BEE7, 0xF8BBD0, 0xB2EBF2,
-    0x1B2A5E, 0x3B1F4A, 0x4A1F1F, 0x1F4A3A, 0x37474F, 0x2B2B2B, 0x4E342E,
+    0xFFF59D, 0xFFCCBC, 0xC8E6C9, 0xBBDEFB, 0xE1BEE7, 0xF8BBD0, 0xB2EBF2, 0xFFFFFF,
+    0x1B2A5E, 0x3B1F4A, 0x4A1F1F, 0x1F4A3A, 0x37474F, 0x2B2B2B, 0x4E342E, 0x000000,
 )
 val TEXT_PRESETS = listOf(0x212121, 0xFFFFFF, 0xB71C1C, 0x0D47A1, 0x1B5E20, 0x4E342E)
