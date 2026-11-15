@@ -72,6 +72,17 @@
                     android:gravity="end"
                     android:visibility="gone" />
 
+                <!-- 長文用のスクロールできる表示（必要な時だけ表示） -->
+                <ListView
+                    android:id="@+id/w_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:divider="@null"
+                    android:dividerHeight="0dp"
+                    android:scrollbars="none"
+                    android:visibility="gone" />
+
                 <FrameLayout
                     android:id="@+id/w_v_bottom"
                     android:layout_width="match_parent"

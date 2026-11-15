@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
  */
 object WidgetRender {
     private const val MAX_CHARS = 3000
+    internal const val MAX_LIST_CHARS = 30000
+    private const val MAX_LIST_LINES = 3000
     const val ACTION_PAGE = "com.ghghuser.fusenizetxt.action.PAGE"
     const val EXTRA_ID = "w_id"
     const val EXTRA_TO = "w_to"
@@ -49,13 +51,14 @@ object WidgetRender {
     fun update(ctx: Context, mgr: AppWidgetManager, id: Int) {
         try {
             mgr.updateAppWidget(id, build(ctx, id))
+            mgr.notifyAppWidgetViewDataChanged(id, R.id.w_list) // スクロール表示の中身を読み直す
         } catch (e: Exception) {
             // 1つのウィジェットの描画失敗で他の更新を止めない
         }
     }
 
     /** (表示テキスト, プレースホルダかどうか) */
-    private fun resolveText(ctx: Context, cfg: WidgetConfig): Pair<String, Boolean> {
+    internal fun resolveText(ctx: Context, cfg: WidgetConfig, limit: Int = MAX_CHARS): Pair<String, Boolean> {
         val u = cfg.fileUri ?: return "タップしてメモを選択" to true
         val uri = Uri.parse(u)
         val read = MemoRepo.readText(ctx, uri)
@@ -66,12 +69,38 @@ object WidgetRender {
                 val manual = cfg.manualName || Store(ctx).isManual(u)
                 val title = if (manual) MemoRepo.displayName(ctx, uri)?.removeSuffix(".txt")?.removeSuffix(".TXT") else null
                 if (!title.isNullOrBlank() && !cfg.styleFor(cfg.cur).showTitle) title to false else "（タップして入力）" to true
-            } else text.take(MAX_CHARS) to false
+            } else text.take(limit) to false
             !MemoRepo.exists(ctx, uri) -> "ファイルが見つかりません\nタップして再設定" to true
             read.exceptionOrNull() is MemoRepo.EncodingException -> "文字コードの確認が必要です\nタップして開く" to true
-            cfg.cachedText.isNotEmpty() -> cfg.cachedText.take(MAX_CHARS) to false
+            cfg.cachedText.isNotEmpty() -> cfg.cachedText.take(limit) to false
             else -> ("読み込めません\n" + (read.exceptionOrNull()?.message ?: "")) to true
         }
+    }
+
+    /** 表示領域に収まらなさそうか（文字数と大きさからの概算） */
+    private fun likelyOverflows(ctx: Context, id: Int, cfg: WidgetConfig, s: com.ghghuser.fusenizetxt.data.WidgetStyle, text: String): Boolean {
+        val o = try {
+            AppWidgetManager.getInstance(ctx).getAppWidgetOptions(id)
+        } catch (e: Exception) {
+            return text.length > 200
+        }
+        val w = minOf(o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0), o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, Int.MAX_VALUE))
+        val h = minOf(o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0), o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, Int.MAX_VALUE))
+        if (w <= 0 || h <= 0) return text.length > 200
+        val ts = s.textSizeSp.toFloat()
+        var availH = h - (s.outer.t + s.outer.b + s.inner.t + s.inner.b).toFloat()
+        if (cfg.pages.size > 1) availH -= s.tabHeightDp
+        if (s.showTitle) availH -= s.titleSizeSp * 1.5f
+        val availW = (w - (s.outer.l + s.outer.r + s.inner.l + s.inner.r)).toFloat().coerceAtLeast(ts)
+        val visibleLines = (availH / (ts * 1.4f)).coerceAtLeast(1f)
+        var lines = 0
+        for (ln in text.split('\n')) {
+            var width = 0f
+            for (ch in ln) width += if (ch.code < 0x80) ts * 0.55f else ts
+            lines += maxOf(1, Math.ceil((width / availW).toDouble()).toInt())
+            if (lines > visibleLines * 2) return true
+        }
+        return lines >= visibleLines * 0.85f
     }
 
     private fun build(ctx: Context, id: Int): RemoteViews {
@@ -122,6 +151,20 @@ object WidgetRender {
         rv.setTextViewTextSize(tid, TypedValue.COMPLEX_UNIT_SP, s.textSizeSp.toFloat())
         rv.setTextColor(tid, fg)
 
+        // 長文はリスト表示に切り替えてスクロールできるようにする（短文は従来どおり配置指定を反映）
+        val useList = s.scroll && !placeholder && likelyOverflows(ctx, id, cfg, s, text)
+        rv.setViewVisibility(R.id.w_list, if (useList) View.VISIBLE else View.GONE)
+        if (useList) {
+            for (t in intArrayOf(R.id.w_t_l, R.id.w_t_c, R.id.w_t_r)) rv.setViewVisibility(t, View.GONE)
+            rv.setRemoteAdapter(
+                R.id.w_list,
+                Intent(ctx, NoteListService::class.java).apply {
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    data = Uri.parse("fusen://list/$id")
+                },
+            )
+        }
+
         // 上部のタイトル（ファイル名）。ウィジェットの設定でオン/オフ・文字サイズを指定
         val titleStr = if (s.showTitle && cfg.fileUri != null) {
             val uu = Uri.parse(cfg.fileUri)
@@ -141,8 +184,8 @@ object WidgetRender {
         }
 
         // 垂直配置: 上下のスペーサー（重み付き）の表示/非表示で上・中央・下を作る
-        rv.setViewVisibility(R.id.w_v_top, if (s.vAlign == 0) View.GONE else View.VISIBLE)
-        rv.setViewVisibility(R.id.w_v_bottom, if (s.vAlign == 2) View.GONE else View.VISIBLE)
+        rv.setViewVisibility(R.id.w_v_top, if (useList || s.vAlign == 0) View.GONE else View.VISIBLE)
+        rv.setViewVisibility(R.id.w_v_bottom, if (useList || s.vAlign == 2) View.GONE else View.VISIBLE)
 
         // タップで編集画面（未設定なら設定画面）
         val linked = cfg.fileUri != null
@@ -152,6 +195,13 @@ object WidgetRender {
             data = Uri.parse("fusen://widget/$id/$page")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
+        rv.setPendingIntentTemplate(
+            R.id.w_list,
+            PendingIntent.getActivity(
+                ctx, 200000 + id * 10 + page, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or (if (android.os.Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0),
+            ),
+        )
         rv.setOnClickPendingIntent(
             R.id.w_card,
             PendingIntent.getActivity(ctx, id * 10 + page, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE),

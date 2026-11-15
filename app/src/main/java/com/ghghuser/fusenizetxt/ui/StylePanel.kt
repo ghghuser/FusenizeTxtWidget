@@ -54,6 +54,11 @@ fun StylePanel(
         SliderRow("ウィジェットの文字サイズ (sp)", style.textSizeSp, 12, 32) { onChange(style.copy(textSizeSp = it)) }
         SliderRow("編集画面の文字サイズ (sp)", style.editSizeSp, 12, 32) { onChange(style.copy(editSizeSp = it)) }
         FilterChip(
+            selected = style.scroll,
+            onClick = { onChange(style.copy(scroll = !style.scroll)) },
+            label = { Text("長文はウィジェット内でスクロール") },
+        )
+        FilterChip(
             selected = style.showTitle,
             onClick = { onChange(style.copy(showTitle = !style.showTitle)) },
             label = { Text("ウィジェット上部にタイトルを表示") },

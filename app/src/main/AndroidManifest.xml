@@ -67,6 +67,11 @@
             </intent-filter>
         </receiver>
 
+        <service
+            android:name=".widget.NoteListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <receiver
             android:name=".widget.PageSwitchReceiver"
             android:exported="false" />
