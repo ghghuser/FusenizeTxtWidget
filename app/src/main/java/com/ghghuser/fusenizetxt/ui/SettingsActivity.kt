@@ -237,7 +237,7 @@ class SettingsActivity : ComponentActivity() {
                     Text("保存フォルダを設定・変更")
                 }
                 OutlinedButton(onClick = { txtPicker.launch(arrayOf("text/*")) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("txtファイルを取り込む")
+                    Text("txtファイルをコピーして取り込む")
                 }
                 HorizontalDivider()
 

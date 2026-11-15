@@ -88,7 +88,15 @@ class ConfigActivity : ComponentActivity() {
         enableEdgeToEdge()
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         page = intent.getIntExtra(EditActivity.EXTRA_PAGE, 0)
-        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+        // 外部アプリから任意のIDで呼ばれても、このアプリのウィジェット以外は扱わない
+        val ours = widgetId != AppWidgetManager.INVALID_APPWIDGET_ID && try {
+            AppWidgetManager.getInstance(this)
+                .getAppWidgetIds(android.content.ComponentName(this, com.ghghuser.fusenizetxt.widget.FusenReceiver::class.java))
+                .contains(widgetId)
+        } catch (e: Exception) {
+            false
+        }
+        if (!ours) {
             setResult(Activity.RESULT_CANCELED)
             finish()
             return
