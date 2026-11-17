@@ -48,7 +48,11 @@ object WidgetRender {
         for (id in mgr.getAppWidgetIds(ComponentName(app, FusenReceiver::class.java))) update(app, mgr, id)
     }
 
-    fun update(ctx: Context, mgr: AppWidgetManager, id: Int) {
+    // 更新が同時に走ると、古い状態で作った表示が後から上書きされる（背景色・タップ先が前のページのまま残る）ため、
+    // 1つずつ順番に、実行時点の最新の設定から作る
+    private val updateLock = Any()
+
+    fun update(ctx: Context, mgr: AppWidgetManager, id: Int) = synchronized(updateLock) {
         try {
             mgr.updateAppWidget(id, build(ctx, id))
         } catch (e: Throwable) {

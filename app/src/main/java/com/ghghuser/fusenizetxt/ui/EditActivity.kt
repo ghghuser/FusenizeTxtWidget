@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.ghghuser.fusenizetxt.FusenApp
+import com.ghghuser.fusenizetxt.R
 import com.ghghuser.fusenizetxt.data.Drafts
 import com.ghghuser.fusenizetxt.data.FileMeta
 import com.ghghuser.fusenizetxt.data.History
@@ -173,6 +174,7 @@ class EditActivity : ComponentActivity() {
     private var navIdx = 0
     private var switching = false
     private var wantKb = true
+    private var keepOnStop = false // 共有など別アプリへ移る時は、戻ってこれるよう編集画面を残す
     private var snapColor = 0xFF2B2B2B.toInt()
     private var exactWarn by mutableStateOf(false)
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -333,8 +335,10 @@ class EditActivity : ComponentActivity() {
                         .putExtra(EXTRA_KB, kbOpen)
                 )
                 finish()
+                // 右スワイプ（前のメモ）は左から、左スワイプ（次のメモ）は右からスライドして入れ替わる
                 @Suppress("DEPRECATION")
-                overridePendingTransition(0, 0)
+                if (delta < 0) overridePendingTransition(R.anim.slide_in_from_left, R.anim.slide_out_to_right)
+                else overridePendingTransition(R.anim.slide_in_from_right, R.anim.slide_out_to_left)
             }
         }
     }
@@ -365,6 +369,7 @@ class EditActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        keepOnStop = false
         if (!receiverRegistered) {
             ContextCompat.registerReceiver(
                 this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED
@@ -375,6 +380,9 @@ class EditActivity : ComponentActivity() {
 
     override fun onStop() {
         saveNow()
+        // ウィジェットから開いた編集画面は、ホームや履歴へ移ったら閉じる（タスク一覧に透明な画面が残らないように）。内容は保存済み
+        val interactive = (getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager).isInteractive
+        if (widgetMode && !keepOnStop && !isFinishing && !isChangingConfigurations && interactive) finishAndRemoveTask()
         if (receiverRegistered) {
             try {
                 unregisterReceiver(screenOffReceiver)
@@ -447,6 +455,7 @@ class EditActivity : ComponentActivity() {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
             .putExtra(Intent.EXTRA_SUBJECT, fileName.removeSuffix(".txt").removeSuffix(".TXT"))
             .putExtra(Intent.EXTRA_TEXT, text.text)
+        keepOnStop = true
         startActivity(Intent.createChooser(send, "共有先を選ぶ"))
     }
 
@@ -472,6 +481,7 @@ class EditActivity : ComponentActivity() {
             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            keepOnStop = true
             startActivity(Intent.createChooser(send, "共有先を選ぶ（txtファイル・UTF-8）"))
         }
     }
@@ -1081,6 +1091,7 @@ class EditActivity : ComponentActivity() {
                 confirmButton = {
                     TextButton(onClick = {
                         exactWarn = false
+                        keepOnStop = true
                         try {
                             startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).setData(android.net.Uri.parse("package:$packageName")))
                         } catch (e: Exception) {
