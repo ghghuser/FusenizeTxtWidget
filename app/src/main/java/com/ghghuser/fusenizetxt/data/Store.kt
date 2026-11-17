@@ -42,7 +42,8 @@ class Store(ctx: Context) {
     fun getConfig(id: Int): WidgetConfig = synchronized(lock) { readConfig(id) }
 
     private fun readConfig(id: Int): WidgetConfig {
-        val s = sp.getString("w_$id", null) ?: return WidgetConfig(id)
+        val s = sp.getString("w_$id", null)
+            ?: return WidgetConfig.defaultFor(id, sp.all.keys.count { it.startsWith("w_") && it.removePrefix("w_").toIntOrNull() != null })
         return try {
             WidgetConfig.fromJson(id, JSONObject(s))
         } catch (e: Exception) {
@@ -263,6 +264,11 @@ class Store(ctx: Context) {
         set(v) {
             if (v == null) sp.edit().remove("editorBg").apply() else sp.edit().putInt("editorBg", v and 0xFFFFFF).apply()
         }
+
+    /** ウィジェット描画で最後に起きたエラー（原因調査用） */
+    var lastWidgetError: String
+        get() = sp.getString("lastWidgetError", "") ?: ""
+        set(v) { sp.edit().putString("lastWidgetError", v).apply() }
 
     /** アプリで開いた時の編集欄の文字色。null = 背景に合わせて自動 */
     var editorTextColor: Int?

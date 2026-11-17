@@ -148,7 +148,7 @@ class UndoManager {
     }
 }
 
-private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY, REMIND, BRIGHT, COLORS }
+private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY, REMIND, BRIGHT, COLORS, AUTONAME }
 
 private data class HistItem(val v: History.Version, val preview: String)
 
@@ -162,6 +162,7 @@ class EditActivity : ComponentActivity() {
         const val EXTRA_PAGE = "fusen_page"
         const val EXTRA_NAV = "fusen_nav" // 一覧の並び（左右スワイプで前後のメモへ移る用）
         const val EXTRA_NAV_IDX = "fusen_nav_idx"
+        const val EXTRA_KB = "fusen_kb" // 前のメモでキーボードが開いていたか
         const val EXTRA_NEW = "fusen_new" // 一覧の＋で作ったばかりのメモ（空のまま閉じたら削除する）
         private const val FORCE_RESAVE = "\u0000"
     }
@@ -171,6 +172,7 @@ class EditActivity : ComponentActivity() {
     private var nav: List<String> = emptyList()
     private var navIdx = 0
     private var switching = false
+    private var wantKb = true
     private var snapColor = 0xFF2B2B2B.toInt()
     private var exactWarn by mutableStateOf(false)
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -210,6 +212,9 @@ class EditActivity : ComponentActivity() {
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         val extraUri = intent.getStringExtra(EXTRA_URI)
         isNewMemo = intent.getBooleanExtra(EXTRA_NEW, false)
+        // 履歴画面（タスク一覧）で背後のホーム画面が透けて見えないよう、画面のサムネイルを使わない
+        if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
+        wantKb = intent.getBooleanExtra(EXTRA_KB, true)
         nav = intent.getStringArrayListExtra(EXTRA_NAV) ?: emptyList()
         navIdx = intent.getIntExtra(EXTRA_NAV_IDX, 0).coerceIn(0, maxOf(0, nav.size - 1))
 
@@ -303,12 +308,6 @@ class EditActivity : ComponentActivity() {
         if (!granted) Toast.makeText(this, "通知が許可されていないため、リマインダーは表示されません（端末の設定で許可できます）", Toast.LENGTH_LONG).show()
     }
 
-    /** 履歴画面（アプリ一覧）で透明に近く見えないよう、画面から離れる間だけ背景に色を付ける */
-    override fun onPause() {
-        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(snapColor))
-        super.onPause()
-    }
-
     /** 左右スワイプ: delta=-1 で一覧の上のメモ、+1 で下のメモ */
     private fun goNeighbor(delta: Int) {
         if (switching || widgetMode || !loaded) return
@@ -318,6 +317,8 @@ class EditActivity : ComponentActivity() {
             return
         }
         switching = true
+        val kbOpen = androidx.core.view.ViewCompat.getRootWindowInsets(window.decorView)
+            ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
         saveNow()
         FusenApp.scope.launch {
             FusenApp.saveMutex.withLock { }
@@ -329,15 +330,17 @@ class EditActivity : ComponentActivity() {
                         .putExtra(EXTRA_URI, list[ni])
                         .putStringArrayListExtra(EXTRA_NAV, list)
                         .putExtra(EXTRA_NAV_IDX, ni)
+                        .putExtra(EXTRA_KB, kbOpen)
                 )
                 finish()
+                @Suppress("DEPRECATION")
+                overridePendingTransition(0, 0)
             }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         com.ghghuser.fusenizetxt.data.Brightness.apply(this)
     }
 
@@ -748,7 +751,7 @@ class EditActivity : ComponentActivity() {
         SideEffect { snapColor = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.55f).copy(alpha = 1f).toArgb() }
         val navEnabled = !widgetMode && nav.size > 1 && !showSettings
         LaunchedEffect(loaded) {
-            if (loaded) {
+            if (loaded && wantKb) {
                 delay(150)
                 try {
                     focus.requestFocus()
@@ -907,7 +910,7 @@ class EditActivity : ComponentActivity() {
                                 if (manualName) {
                                     CompactMenuItem(text = { Text("ファイル名を自動に戻す") }, onClick = {
                                         menuOpen = false
-                                        backToAutoName()
+                                        dlg = Dlg.AUTONAME
                                     })
                                 }
                                 CompactMenuItem(text = { Text("リマインダー") }, onClick = {
@@ -1189,6 +1192,23 @@ class EditActivity : ComponentActivity() {
                     }
                 },
                 confirmButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("閉じる") } },
+            )
+            Dlg.AUTONAME -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("ファイル名を自動に戻しますか？") },
+                text = {
+                    Text(
+                        "今のファイル名「" + fileName.removeSuffix(".txt").removeSuffix(".TXT") + "」は消えて、メモの1行目から付く名前（「" +
+                            MemoRepo.titleFor(text.text) + "」）に置き換わります。以降は、1行目を書き換えるたびにファイル名も変わります。"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        dlg = Dlg.NONE
+                        backToAutoName()
+                    }) { Text("自動に戻す") }
+                },
+                dismissButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") } },
             )
             Dlg.COLORS -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },

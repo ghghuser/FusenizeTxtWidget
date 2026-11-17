@@ -380,6 +380,9 @@ class SettingsActivity : ComponentActivity() {
                 HorizontalDivider()
 
                 Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
+                store.lastWidgetError.takeIf { it.isNotBlank() }?.let {
+                    Text("ウィジェット描画の最後のエラー: $it", style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
         }

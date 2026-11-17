@@ -51,9 +51,21 @@ object WidgetRender {
     fun update(ctx: Context, mgr: AppWidgetManager, id: Int) {
         try {
             mgr.updateAppWidget(id, build(ctx, id))
+        } catch (e: Throwable) {
+            // 描画に失敗すると古い表示が残る（背景色やタップ先が前のページのまま）ため、簡易表示で必ず更新する
+            try {
+                val st = e.stackTrace.firstOrNull()
+                Store(ctx).lastWidgetError = "${e.javaClass.simpleName}: ${e.message} @ ${st?.fileName}:${st?.lineNumber}"
+            } catch (_: Throwable) {
+            }
+            try {
+                mgr.updateAppWidget(id, build(ctx, id, safe = true))
+            } catch (_: Throwable) {
+            }
+        }
+        try {
             mgr.notifyAppWidgetViewDataChanged(id, R.id.w_list) // スクロール表示の中身を読み直す
-        } catch (e: Exception) {
-            // 1つのウィジェットの描画失敗で他の更新を止めない
+        } catch (_: Throwable) {
         }
     }
 
@@ -103,11 +115,12 @@ object WidgetRender {
         return lines >= visibleLines * 0.85f
     }
 
-    private fun build(ctx: Context, id: Int): RemoteViews {
+    private fun build(ctx: Context, id: Int, safe: Boolean = false): RemoteViews {
         val cfg = Store(ctx).getConfig(id)
         val page = cfg.cur
         val s = cfg.styleFor(page)
-        val (text, placeholder) = resolveText(ctx, cfg)
+        val (text, placeholder) = if (safe) ("表示できませんでした\nタップして開く" to true)
+        else runCatching { resolveText(ctx, cfg) }.getOrElse { "読み込めません\nタップして開く" to true }
         val d = ctx.resources.displayMetrics.density
         fun px(dp: Int) = (dp * d + 0.5f).toInt()
 
@@ -145,14 +158,15 @@ object WidgetRender {
         if (face != Typeface.NORMAL && text.isNotEmpty()) {
             styled.setSpan(StyleSpan(face), 0, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
+        val useListEarly = !safe && s.scroll && !placeholder && runCatching { likelyOverflows(ctx, id, cfg, s, text) }.getOrDefault(false)
         val fgRgb = s.effectiveTextRgb()
         val fg = if (placeholder) (fgRgb and 0xFFFFFF) or (0x99 shl 24) else rgbToArgb(fgRgb)
-        rv.setTextViewText(tid, styled)
+        rv.setTextViewText(tid, if (useListEarly) "" else styled)
         rv.setTextViewTextSize(tid, TypedValue.COMPLEX_UNIT_SP, s.textSizeSp.toFloat())
         rv.setTextColor(tid, fg)
 
         // 長文はリスト表示に切り替えてスクロールできるようにする（短文は従来どおり配置指定を反映）
-        val useList = s.scroll && !placeholder && likelyOverflows(ctx, id, cfg, s, text)
+        val useList = useListEarly
         rv.setViewVisibility(R.id.w_list, if (useList) View.VISIBLE else View.GONE)
         if (useList) {
             for (t in intArrayOf(R.id.w_t_l, R.id.w_t_c, R.id.w_t_r)) rv.setViewVisibility(t, View.GONE)
@@ -166,7 +180,7 @@ object WidgetRender {
         }
 
         // 上部のタイトル（ファイル名）。ウィジェットの設定でオン/オフ・文字サイズを指定
-        val titleStr = if (s.showTitle && cfg.fileUri != null) {
+        val titleStr = if (!safe && s.showTitle && cfg.fileUri != null) {
             val uu = Uri.parse(cfg.fileUri)
             val nm = MemoRepo.displayName(ctx, uu)
             nm?.let { MemoRepo.shownTitle(it, cfg.manualName || Store(ctx).isManual(cfg.fileUri!!)) }
@@ -287,6 +301,9 @@ class PageSwitchReceiver : BroadcastReceiver() {
         val pending = goAsync()
         FusenApp.scope.launch {
             try {
+                WidgetRender.update(app, AppWidgetManager.getInstance(app), id)
+                // ランチャー側で更新が取りこぼされた場合に備えて、少し後にもう一度反映する
+                kotlinx.coroutines.delay(500)
                 WidgetRender.update(app, AppWidgetManager.getInstance(app), id)
             } finally {
                 pending.finish()

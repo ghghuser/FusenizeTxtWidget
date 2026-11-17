@@ -152,6 +152,17 @@ data class WidgetConfig(
         .put("style", style.toJson())
 
     companion object {
+        /** 新しいウィジェットの初期値。何個目かに応じて背景色の並びをずらし、同じ画面の2つ目以降は別の色にする */
+        fun defaultFor(id: Int, index: Int): WidgetConfig {
+            val n = PAGE_COLORS.size
+            val i = ((index % n) + n) % n
+            return WidgetConfig(
+                widgetId = id,
+                pages = listOf(PageCfg(), PageCfg(bgColor = PAGE_COLORS[(i + 1) % n]), PageCfg(bgColor = PAGE_COLORS[(i + 2) % n])),
+                style = WidgetStyle(bgColor = PAGE_COLORS[i]),
+            )
+        }
+
         fun fromJson(id: Int, o: JSONObject): WidgetConfig {
             val arr = o.optJSONArray("pages")
             val pages: List<PageCfg> = if (arr != null && arr.length() > 0) {
