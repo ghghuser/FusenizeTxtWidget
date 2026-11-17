@@ -217,6 +217,13 @@ class EditActivity : ComponentActivity() {
         // 履歴画面（タスク一覧）で背後のホーム画面が透けて見えないよう、画面のサムネイルを使わない
         if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         wantKb = intent.getBooleanExtra(EXTRA_KB, true)
+        if (intent.hasExtra(EXTRA_KB)) {
+            // スワイプ移動時: キーボードは開閉状態を引き継ぐ（閉じていたら一瞬出ないように、開いていたら早めに出す）
+            window.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+                    (if (wantKb) WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE else WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+            )
+        }
         nav = intent.getStringArrayListExtra(EXTRA_NAV) ?: emptyList()
         navIdx = intent.getIntExtra(EXTRA_NAV_IDX, 0).coerceIn(0, maxOf(0, nav.size - 1))
 
@@ -815,7 +822,7 @@ class EditActivity : ComponentActivity() {
 
         Box(
             Modifier.fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f))
+                .background(Color.Black.copy(alpha = 0.34f))
                 .systemBarsPadding()
                 .imePadding()
                 // clickable だと Enter キーのイベントが「タップ」扱いで閉じてしまうため、ポインタ入力のみで判定する

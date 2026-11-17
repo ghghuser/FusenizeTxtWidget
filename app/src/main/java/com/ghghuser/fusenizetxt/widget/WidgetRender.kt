@@ -128,6 +128,7 @@ object WidgetRender {
         val d = ctx.resources.displayMetrics.density
         fun px(dp: Int) = (dp * d + 0.5f).toInt()
 
+        Store(ctx).debugLog("描画 id=$id 表示中=${page + 1} 背景=%06X 文字=%d%s".format(s.bgColor, text.length, if (safe) " 簡易" else ""))
         val rv = RemoteViews(
             ctx.packageName,
             // ページごとに別のレイアウトにして、ページを切り替えるたびにランチャーに表示を作り直させる（背景色・タップ先が前のページのまま残るのを防ぐ）
@@ -305,13 +306,13 @@ class PageSwitchReceiver : BroadcastReceiver() {
         val to = intent.getIntExtra(WidgetRender.EXTRA_TO, 0)
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
         val app = context.applicationContext
-        Store(app).updateConfig(id) { it.copy(current = to.coerceIn(0, it.pages.size - 1)) }
+        val st = Store(app)
+        val before = st.getConfig(id).cur
+        st.updateConfig(id) { it.copy(current = to.coerceIn(0, it.pages.size - 1)) }
+        st.debugLog("タブ押下 id=$id ${before + 1}→${to + 1} 保存後=${st.getConfig(id).cur + 1}")
         val pending = goAsync()
         FusenApp.scope.launch {
             try {
-                WidgetRender.update(app, AppWidgetManager.getInstance(app), id)
-                // ランチャー側で更新が取りこぼされた場合に備えて、少し後にもう一度反映する
-                kotlinx.coroutines.delay(500)
                 WidgetRender.update(app, AppWidgetManager.getInstance(app), id)
             } finally {
                 pending.finish()

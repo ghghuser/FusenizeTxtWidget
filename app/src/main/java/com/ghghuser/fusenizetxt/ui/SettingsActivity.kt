@@ -383,6 +383,14 @@ class SettingsActivity : ComponentActivity() {
                 store.lastWidgetError.takeIf { it.isNotBlank() }?.let {
                     Text("ウィジェット描画の最後のエラー: $it", style = MaterialTheme.typography.labelSmall)
                 }
+                var dbg by remember { mutableStateOf(store.debugLogText) }
+                HorizontalDivider()
+                Text("ウィジェット動作ログ（不具合調査用・新しい順）", style = MaterialTheme.typography.labelLarge)
+                Row {
+                    TextButton(onClick = { dbg = store.debugLogText }) { Text("更新") }
+                    TextButton(onClick = { store.debugLogText = ""; dbg = "" }) { Text("消す") }
+                }
+                Text(dbg.ifBlank { "（まだありません）" }, style = MaterialTheme.typography.labelSmall)
             }
         }
         }

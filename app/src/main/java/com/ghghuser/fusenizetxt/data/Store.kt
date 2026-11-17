@@ -265,6 +265,22 @@ class Store(ctx: Context) {
             if (v == null) sp.edit().remove("editorBg").apply() else sp.edit().putInt("editorBg", v and 0xFFFFFF).apply()
         }
 
+    /** 不具合調査用の動作ログ（新しい順に最大30行） */
+    fun debugLog(line: String) {
+        try {
+            val t = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+            synchronized(lock) {
+                val cur = (sp.getString("dbgLog", "") ?: "").split('\n').filter { it.isNotBlank() }
+                sp.edit().putString("dbgLog", (listOf("$t $line") + cur).take(30).joinToString("\n")).apply()
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    var debugLogText: String
+        get() = sp.getString("dbgLog", "") ?: ""
+        set(v) { sp.edit().putString("dbgLog", v).apply() }
+
     /** ウィジェット描画で最後に起きたエラー（原因調査用） */
     var lastWidgetError: String
         get() = sp.getString("lastWidgetError", "") ?: ""
