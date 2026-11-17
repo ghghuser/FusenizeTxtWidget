@@ -358,6 +358,7 @@ class EditActivity : ComponentActivity() {
     /** ウィジェットの編集画面: 左右スワイプで前後のタブへ（端で止まる。メモ未設定のタブは選択画面を開く） */
     private fun goPage(delta: Int) {
         val cfg = store.getConfig(widgetId)
+        store.debugLog("編集画面スワイプ タブ${page + 1} 方向=$delta 全${cfg.pages.size}")
         val to = page + delta
         if (to !in cfg.pages.indices) {
             Toast.makeText(this, if (delta < 0) "最初のタブです" else "最後のタブです", Toast.LENGTH_SHORT).show()
@@ -870,7 +871,11 @@ class EditActivity : ComponentActivity() {
 
         Box(
             Modifier.fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.34f))
+                .background(
+                    // アプリ内の編集は一覧の背景色・透明度を引き継ぐ（未指定なら従来の暗め）。ウィジェットの編集は従来どおり
+                    if (!widgetMode && store.listBgColor != null) Color(rgbToArgb(store.listBgColor!!)).copy(alpha = store.listBgAlpha / 255f)
+                    else Color.Black.copy(alpha = 0.34f)
+                )
                 .systemBarsPadding()
                 .imePadding()
                 // clickable だと Enter キーのイベントが「タップ」扱いで閉じてしまうため、ポインタ入力のみで判定する
@@ -905,6 +910,9 @@ class EditActivity : ComponentActivity() {
                                 if (released) {
                                     val dx = last.x - down.position.x
                                     val dy = last.y - down.position.y
+                                    if (kotlin.math.abs(dx) > 60.dp.toPx()) {
+                                        store.debugLog("スワイプ判定 dx=${dx.toInt()} dy=${dy.toInt()} ${lastT - down.uptimeMillis}ms")
+                                    }
                                     if (kotlin.math.abs(dx) > 110.dp.toPx() && kotlin.math.abs(dx) > 2.5f * kotlin.math.abs(dy) && lastT - down.uptimeMillis < 500) {
                                         goNeighbor(if (dx > 0) -1 else 1)
                                     }

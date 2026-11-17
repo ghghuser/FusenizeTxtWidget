@@ -55,6 +55,7 @@ object WidgetRender {
     fun update(ctx: Context, mgr: AppWidgetManager, id: Int) = synchronized(updateLock) {
         try {
             mgr.updateAppWidget(id, build(ctx, id))
+            Store(ctx).debugLog("  更新を送信 id=$id")
         } catch (e: Throwable) {
             // 描画に失敗すると古い表示が残る（背景色やタップ先が前のページのまま）ため、簡易表示で必ず更新する
             try {
@@ -204,14 +205,16 @@ object WidgetRender {
         rv.setViewVisibility(R.id.w_list, if (useList) View.VISIBLE else View.GONE)
         if (useList) {
             for (t in intArrayOf(R.id.w_t_l, R.id.w_t_c, R.id.w_t_r)) rv.setViewVisibility(t, View.GONE)
-            rv.setRemoteAdapter(
-                R.id.w_list,
-                Intent(ctx, NoteListService::class.java).apply {
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    data = Uri.parse("fusen://list/$id/$page")
-                },
-            )
         }
+        // 一覧のつなぎ先はページに関わらず常に同じ内容で毎回設定する（ページごとに変えたり、有る無しを切り替えたりしない）
+        rv.setRemoteAdapter(
+            R.id.w_list,
+            Intent(ctx, NoteListService::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                data = Uri.parse("fusen://list/$id")
+            },
+        )
+        Store(ctx).debugLog("  一覧表示=$useList 文字=${text.length}")
 
         // 上部のタイトル（ファイル名）。ウィジェットの設定でオン/オフ・文字サイズを指定
         val titleStr = if (!safe && s.showTitle && cfg.fileUri != null) {
@@ -232,8 +235,8 @@ object WidgetRender {
         }
 
         // 垂直配置: 上下のスペーサー（重み付き）の表示/非表示で上・中央・下を作る
-        rv.setViewVisibility(R.id.w_v_top, if (useList || s.vAlign == 0) View.GONE else View.VISIBLE)
-        rv.setViewVisibility(R.id.w_v_bottom, if (useList || s.vAlign == 2) View.GONE else View.VISIBLE)
+        rv.setViewVisibility(R.id.w_v_top, if (s.vAlign == 0) View.GONE else View.VISIBLE)
+        rv.setViewVisibility(R.id.w_v_bottom, if (s.vAlign == 2) View.GONE else View.VISIBLE)
 
         // タップで編集画面（未設定なら設定画面）
         val linked = cfg.fileUri != null
