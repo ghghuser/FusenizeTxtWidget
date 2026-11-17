@@ -136,7 +136,19 @@ data class WidgetConfig(
 
     fun withPageCount(n: Int): WidgetConfig {
         val c = n.coerceIn(1, MAX_PAGES)
-        val np = if (c <= pages.size) pages.take(c) else pages + List(c - pages.size) { i -> PageCfg(bgColor = PAGE_COLORS[(pages.size + i) % PAGE_COLORS.size]) }
+        val np = if (c <= pages.size) pages.take(c) else {
+            // 増やしたページには、すでに使っている色と重ならない色を順に割り当てる
+            val n = PAGE_COLORS.size
+            val base = PAGE_COLORS.indexOf(styleFor(0).bgColor).takeIf { it >= 0 } ?: 0
+            val used = pages.indices.map { styleFor(it).bgColor }.toMutableSet()
+            val added = ArrayList<PageCfg>()
+            for (k in pages.size until c) {
+                val pick = (0 until n).map { PAGE_COLORS[(base + k + it) % n] }.firstOrNull { it !in used } ?: PAGE_COLORS[(base + k) % n]
+                used.add(pick)
+                added.add(PageCfg(bgColor = pick))
+            }
+            pages + added
+        }
         return copy(pages = np, current = current.coerceIn(0, c - 1))
     }
 

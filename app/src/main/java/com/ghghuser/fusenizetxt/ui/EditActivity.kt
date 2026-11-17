@@ -320,7 +320,11 @@ class EditActivity : ComponentActivity() {
 
     /** 左右スワイプ: delta=-1 で一覧の上のメモ、+1 で下のメモ */
     private fun goNeighbor(delta: Int) {
-        if (switching || widgetMode || !loaded) return
+        if (switching || !loaded) return
+        if (widgetMode) {
+            goPage(delta)
+            return
+        }
         val ni = navIdx + delta
         if (ni !in nav.indices) {
             Toast.makeText(this, if (delta < 0) "一覧の先頭です" else "一覧の末尾です", Toast.LENGTH_SHORT).show()
@@ -347,6 +351,40 @@ class EditActivity : ComponentActivity() {
                 @Suppress("DEPRECATION")
                 if (delta < 0) overridePendingTransition(R.anim.slide_in_from_left, R.anim.slide_out_to_right)
                 else overridePendingTransition(R.anim.slide_in_from_right, R.anim.slide_out_to_left)
+            }
+        }
+    }
+
+    /** ウィジェットの編集画面: 左右スワイプで前後のタブへ（端で止まる。メモ未設定のタブは選択画面を開く） */
+    private fun goPage(delta: Int) {
+        val cfg = store.getConfig(widgetId)
+        val to = page + delta
+        if (to !in cfg.pages.indices) {
+            Toast.makeText(this, if (delta < 0) "最初のタブです" else "最後のタブです", Toast.LENGTH_SHORT).show()
+            return
+        }
+        switching = true
+        val kbOpen = androidx.core.view.ViewCompat.getRootWindowInsets(window.decorView)
+            ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        saveNow()
+        val unset = cfg.pages[to].fileUri == null
+        FusenApp.scope.launch {
+            FusenApp.saveMutex.withLock { }
+            // ウィジェット側のタブ表示も移動先に合わせる
+            store.updateConfig(widgetId) { it.copy(current = to.coerceIn(0, it.pages.size - 1)) }
+            withContext(Dispatchers.Main) {
+                val next = if (unset) Intent(this@EditActivity, ConfigActivity::class.java) else Intent(this@EditActivity, EditActivity::class.java).putExtra(EXTRA_KB, kbOpen)
+                startActivity(
+                    next.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId).putExtra(EXTRA_PAGE, to)
+                )
+                finish()
+                @Suppress("DEPRECATION")
+                if (delta < 0) overridePendingTransition(R.anim.slide_in_from_left, R.anim.slide_out_to_right)
+                else overridePendingTransition(R.anim.slide_in_from_right, R.anim.slide_out_to_left)
+            }
+            try {
+                FusenApp.refreshWidgets(applicationContext)
+            } catch (_: Exception) {
             }
         }
     }
@@ -388,6 +426,12 @@ class EditActivity : ComponentActivity() {
 
     override fun onStop() {
         saveNow()
+        if (widgetMode) {
+            try {
+                FusenApp.refreshWidgets(applicationContext) // 設定の変更（ページ数など）を閉じる時にも必ず反映
+            } catch (e: Exception) {
+            }
+        }
         
         if (receiverRegistered) {
             try {
@@ -765,7 +809,7 @@ class EditActivity : ComponentActivity() {
         val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else if (appFgSel != null) Color(rgbToArgb(appFgSel!!)) else if (appEd != null) Color(rgbToArgb(contrastTextRgb(appEd))) else cs.onSurfaceVariant
 
         SideEffect { snapColor = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.55f).copy(alpha = 1f).toArgb() }
-        val navEnabled = !widgetMode && nav.size > 1 && !showSettings
+        val navEnabled = (if (widgetMode) pageCount > 1 else nav.size > 1) && !showSettings
         LaunchedEffect(loaded) {
             if (loaded && wantKb) {
                 delay(150)
@@ -792,6 +836,10 @@ class EditActivity : ComponentActivity() {
                 val bgc = pageBg
                 store.updateConfig(widgetId) {
                     it.copy(style = style).withPageCount(pageCount).updatePage(pg) { p -> p.copy(bgColor = bgc) }
+                }
+                try {
+                    FusenApp.refreshWidgets(applicationContext) // すぐ反映（ページ数の変更など）
+                } catch (e: Exception) {
                 }
                 delay(200)
                 try {

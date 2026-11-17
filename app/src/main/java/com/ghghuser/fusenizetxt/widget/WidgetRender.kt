@@ -119,6 +119,32 @@ object WidgetRender {
         return lines >= visibleLines * 0.85f
     }
 
+    /** 角丸の単色の背景画像（下にタブがある時は下の角を付けない）。大きすぎないよう縮小して作り、fitXYで引き伸ばす */
+    private fun bgBitmap(ctx: Context, id: Int, argb: Int, hasTabs: Boolean): android.graphics.Bitmap {
+        val d = ctx.resources.displayMetrics.density
+        var wdp = 160
+        var hdp = 160
+        try {
+            val o = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(id)
+            wdp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 160).coerceAtLeast(40)
+            hdp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160).coerceAtLeast(40)
+        } catch (_: Throwable) {
+        }
+        val wpx = wdp * d
+        val hpx = hdp * d
+        val k = minOf(1f, Math.sqrt(160000.0 / (wpx * hpx)).toFloat())
+        val w = (wpx * k).toInt().coerceAtLeast(16)
+        val h = (hpx * k).toInt().coerceAtLeast(16)
+        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val r = 8f * d * k
+        val br = if (hasTabs) 0f else r
+        val path = android.graphics.Path().apply {
+            addRoundRect(android.graphics.RectF(0f, 0f, w.toFloat(), h.toFloat()), floatArrayOf(r, r, r, r, br, br, br, br), android.graphics.Path.Direction.CW)
+        }
+        android.graphics.Canvas(bmp).drawPath(path, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = argb })
+        return bmp
+    }
+
     private fun build(ctx: Context, id: Int, safe: Boolean = false): RemoteViews {
         val cfg = Store(ctx).getConfig(id)
         val page = cfg.cur
@@ -141,10 +167,9 @@ object WidgetRender {
 
         // 背景色と透過度（形は角丸のdrawable、色はフィルタ、透過度はimageAlpha）
         val hasTabs = cfg.pages.size > 1
-        rv.setImageViewResource(R.id.w_bg, if (hasTabs) R.drawable.widget_note_bg_top else R.drawable.widget_note_bg)
         rv.setImageViewResource(R.id.w_paper, if (hasTabs) R.drawable.widget_note_paper_top else R.drawable.widget_note_paper)
-        rv.setInt(R.id.w_bg, "setColorFilter", rgbToArgb(s.bgColor))
-        rv.setInt(R.id.w_bg, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
+        // 背景は色と透過度を焼き込んだ画像で渡す（色フィルタ方式だと、ページを切り替えても前の色のまま残る端末があるため）
+        rv.setImageViewBitmap(R.id.w_bg, bgBitmap(ctx, id, rgbToArgb(s.bgColor, s.bgAlpha.coerceIn(0, 255)), hasTabs))
         rv.setViewVisibility(R.id.w_paper, if (s.paper) android.view.View.VISIBLE else android.view.View.GONE)
         rv.setInt(R.id.w_paper, "setImageAlpha", (s.bgAlpha.coerceIn(0, 255) * s.paperStrength / 100).coerceIn(0, 255))
 
