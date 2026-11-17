@@ -48,7 +48,7 @@
             android:exported="false"
             android:taskAffinity=""
             android:excludeFromRecents="true"
-            android:theme="@style/Theme.Fusen.Transparent"
+            android:theme="@style/Theme.Fusen.Editor"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
 

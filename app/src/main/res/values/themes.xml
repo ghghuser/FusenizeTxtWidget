@@ -16,4 +16,12 @@
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
     </style>
+
+    <!-- ウィジェットの編集画面: 壁紙を背景にした不透明ウィンドウ（透明だと、タスク一覧でホーム画面が透けて写り込むため） -->
+    <style name="Theme.Fusen.Editor" parent="Theme.Fusen">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

@@ -128,7 +128,11 @@ object WidgetRender {
         val d = ctx.resources.displayMetrics.density
         fun px(dp: Int) = (dp * d + 0.5f).toInt()
 
-        val rv = RemoteViews(ctx.packageName, R.layout.widget_note)
+        val rv = RemoteViews(
+            ctx.packageName,
+            // ページごとに別のレイアウトにして、ページを切り替えるたびにランチャーに表示を作り直させる（背景色・タップ先が前のページのまま残るのを防ぐ）
+            when (page) { 1 -> R.layout.widget_note_p1; 2 -> R.layout.widget_note_p2; 3 -> R.layout.widget_note_p3; 4 -> R.layout.widget_note_p4; else -> R.layout.widget_note_p0 },
+        )
 
         // 余白（外側: 枠と背景の間、内側: 背景と文字の間）
         rv.setViewPadding(R.id.w_root, px(s.outer.l), px(s.outer.t), px(s.outer.r), px(s.outer.b))

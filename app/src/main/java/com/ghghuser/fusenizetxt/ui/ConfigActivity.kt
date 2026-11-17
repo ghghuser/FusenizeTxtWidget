@@ -87,7 +87,8 @@ class ConfigActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-        page = intent.getIntExtra(EditActivity.EXTRA_PAGE, 0)
+        // タップ先が古いまま残ることがあるため、実際に表示中のページを使う
+        page = if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) Store(this).getConfig(widgetId).cur else 0
         // 外部アプリから任意のIDで呼ばれても、このアプリのウィジェット以外は扱わない
         val ours = widgetId != AppWidgetManager.INVALID_APPWIDGET_ID && try {
             AppWidgetManager.getInstance(this)

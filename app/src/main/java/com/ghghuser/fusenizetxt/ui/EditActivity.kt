@@ -222,7 +222,8 @@ class EditActivity : ComponentActivity() {
 
         if (widgetMode) {
             val cfg = store.getConfig(widgetId)
-            page = intent.getIntExtra(EXTRA_PAGE, cfg.cur).coerceIn(0, cfg.pages.size - 1)
+            // ウィジェットのタップ先が古いまま残ることがあるため、実際に表示中のページ（切替タブで更新される）を使う
+            page = cfg.cur
             style = cfg.style
             pageCount = cfg.pages.size
             pageBg = cfg.pages[page].bgColor
@@ -380,9 +381,7 @@ class EditActivity : ComponentActivity() {
 
     override fun onStop() {
         saveNow()
-        // ウィジェットから開いた編集画面は、ホームや履歴へ移ったら閉じる（タスク一覧に透明な画面が残らないように）。内容は保存済み
-        val interactive = (getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager).isInteractive
-        if (widgetMode && !keepOnStop && !isFinishing && !isChangingConfigurations && interactive) finishAndRemoveTask()
+        
         if (receiverRegistered) {
             try {
                 unregisterReceiver(screenOffReceiver)
