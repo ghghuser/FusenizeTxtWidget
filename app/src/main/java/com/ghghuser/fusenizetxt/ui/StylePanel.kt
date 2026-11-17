@@ -30,10 +30,27 @@ fun StylePanel(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 0.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
+        FilterChip(
+            selected = style.showTitle,
+            onClick = { onChange(style.copy(showTitle = !style.showTitle)) },
+            label = { Text("ウィジェット上部にタイトルを表示") },
+        )
+        if (style.showTitle) {
+            SliderRow("タイトルの文字サイズ (sp)", style.titleSizeSp, 8, 32) { onChange(style.copy(titleSizeSp = it)) }
+        }
+        FilterChip(
+            selected = style.scroll,
+            onClick = { onChange(style.copy(scroll = !style.scroll)) },
+            label = { Text("長文はウィジェット内でスクロール") },
+        )
+        HorizontalDivider()
         if (pageNo + 1 < MAX_PAGES) {
             SliderRow("ページ数（2以上で最下段にページ切替）", pageCount, pageNo + 1, MAX_PAGES) { onPageCount(it) }
         } else {
             Text("ページ数: $MAX_PAGES", style = MaterialTheme.typography.labelMedium)
+        }
+        if (pageCount > 1) {
+            SliderRow("ページ数タブの太さ (dp)", style.tabHeightDp, 14, 48) { onChange(style.copy(tabHeightDp = it)) }
         }
         HorizontalDivider()
         ColorPickerRow(
@@ -46,29 +63,13 @@ fun StylePanel(
         FilterChip(
             selected = style.autoText,
             onClick = { onChange(style.copy(autoText = !style.autoText)) },
-            label = { Text("背景に合わせて自動で決める") },
+            label = { Text("自動（背景に合わせて決める）") },
         )
         if (!style.autoText) {
             ColorPickerRow("文字色", style.textColor, TEXT_PRESETS) { onChange(style.copy(textColor = it)) }
         }
         SliderRow("ウィジェットの文字サイズ (sp)", style.textSizeSp, 12, 32) { onChange(style.copy(textSizeSp = it)) }
         SliderRow("編集画面の文字サイズ (sp)", style.editSizeSp, 12, 32) { onChange(style.copy(editSizeSp = it)) }
-        FilterChip(
-            selected = style.scroll,
-            onClick = { onChange(style.copy(scroll = !style.scroll)) },
-            label = { Text("長文はウィジェット内でスクロール") },
-        )
-        FilterChip(
-            selected = style.showTitle,
-            onClick = { onChange(style.copy(showTitle = !style.showTitle)) },
-            label = { Text("ウィジェット上部にタイトルを表示") },
-        )
-        if (style.showTitle) {
-            SliderRow("タイトルの文字サイズ (sp)", style.titleSizeSp, 8, 32) { onChange(style.copy(titleSizeSp = it)) }
-        }
-        if (pageCount > 1) {
-            SliderRow("ページ切替バーの高さ (dp)", style.tabHeightDp, 14, 48) { onChange(style.copy(tabHeightDp = it)) }
-        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = style.bold, onClick = { onChange(style.copy(bold = !style.bold)) }, label = { Text("太字") })
             FilterChip(selected = style.paper, onClick = { onChange(style.copy(paper = !style.paper)) }, label = { Text("背景の質感") })

@@ -118,11 +118,11 @@ object WidgetRender {
         rv.setViewPadding(R.id.w_text_box, px(s.inner.l), px(s.inner.t), px(s.inner.r), px(s.inner.b))
 
         // 背景色と透過度（形は角丸のdrawable、色はフィルタ、透過度はimageAlpha）
-        rv.setInt(R.id.w_bg, "setColorFilter", rgbToArgb(s.bgColor))
-        rv.setInt(R.id.w_bg, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
         val hasTabs = cfg.pages.size > 1
         rv.setImageViewResource(R.id.w_bg, if (hasTabs) R.drawable.widget_note_bg_top else R.drawable.widget_note_bg)
         rv.setImageViewResource(R.id.w_paper, if (hasTabs) R.drawable.widget_note_paper_top else R.drawable.widget_note_paper)
+        rv.setInt(R.id.w_bg, "setColorFilter", rgbToArgb(s.bgColor))
+        rv.setInt(R.id.w_bg, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
         rv.setViewVisibility(R.id.w_paper, if (s.paper) android.view.View.VISIBLE else android.view.View.GONE)
         rv.setInt(R.id.w_paper, "setImageAlpha", (s.bgAlpha.coerceIn(0, 255) * s.paperStrength / 100).coerceIn(0, 255))
 
@@ -160,7 +160,7 @@ object WidgetRender {
                 R.id.w_list,
                 Intent(ctx, NoteListService::class.java).apply {
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    data = Uri.parse("fusen://list/$id")
+                    data = Uri.parse("fusen://list/$id/$page")
                 },
             )
         }
@@ -193,7 +193,8 @@ object WidgetRender {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
             putExtra(EditActivity.EXTRA_PAGE, page)
             data = Uri.parse("fusen://widget/$id/$page")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            // 以前の編集画面が残っていると別ページの内容が開くため、毎回作り直す
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
         rv.setPendingIntentTemplate(
             R.id.w_list,

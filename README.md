@@ -2,7 +2,7 @@
 
 付箋からtxtへ、txtから付箋へ、いつでも安全にメモしたい付箋ウィジェット for Android。
 
-- アプリ名: **FusenizeTxt**（Kotlin + Jetpack Glance / Jetpack Compose）
+- アプリ名: **FusenizeTxt**（Kotlin + Jetpack Compose（ウィジェットは RemoteViews））
 - メモは常に普通のtxtファイルとして保存されます（保存フォルダは自由に選べます。未設定なら `Documents/FusenizeTxtWidget`）
 - ビルドは GitHub Actions のみ。成果物は Actions の Artifacts にある `FusenizeTxtWidget-build<ビルド番号>-debug.apk`
 
@@ -32,3 +32,10 @@
 - 背景色: `app/src/main/res/values/colors.xml` の `ic_launcher_background`
 - 前景（図柄）: `app/src/main/res/drawable/ic_launcher_foreground.xml`（ベクター）
 - 構成: `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`
+
+## 開発者向けメモ
+
+- 構成: `ui/`（Compose画面: 一覧 `MainActivity`・編集 `EditActivity`・設定 `SettingsActivity`・ウィジェット設定 `ConfigActivity`/`StylePanel`）、`widget/`（`WidgetRender` が RemoteViews を組み立て、長文は `NoteListService` の ListView でスクロール）、`data/`（`Store`=SharedPreferences、`MemoRepo`=txtの読み書き、`Reminders`/`Backup`/`History` ほか）
+- 保存先: SAFで選んだフォルダ / MediaStore(`Documents/<フォルダ名>`) / 端末内 の順に使えるものを自動選択（`MemoRepo`）
+- ウィジェットの設定は ウィジェットID単位で `Store` にJSON保存（`data/Models.kt` の `WidgetConfig`、最大5ページ、背景色はページ別）
+- 環境: Kotlin 2.0 / AGP 8.9 / Gradle 8.11 / compile・targetSdk 35 / minSdk 29。デバッグ署名は固定キーストアなので上書きインストール可

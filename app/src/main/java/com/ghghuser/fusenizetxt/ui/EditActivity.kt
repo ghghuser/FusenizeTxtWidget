@@ -54,6 +54,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -146,7 +148,7 @@ class UndoManager {
     }
 }
 
-private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY, REMIND, BRIGHT }
+private enum class Dlg { NONE, DELETE, CLEAR, RENAME, HISTORY, REMIND, BRIGHT, COLORS }
 
 private data class HistItem(val v: History.Version, val preview: String)
 
@@ -158,12 +160,18 @@ class EditActivity : ComponentActivity() {
     companion object {
         const val EXTRA_URI = "fusen_uri"
         const val EXTRA_PAGE = "fusen_page"
+        const val EXTRA_NAV = "fusen_nav" // 一覧の並び（左右スワイプで前後のメモへ移る用）
+        const val EXTRA_NAV_IDX = "fusen_nav_idx"
         const val EXTRA_NEW = "fusen_new" // 一覧の＋で作ったばかりのメモ（空のまま閉じたら削除する）
         private const val FORCE_RESAVE = "\u0000"
     }
 
     private lateinit var store: Store
     private var isNewMemo = false
+    private var nav: List<String> = emptyList()
+    private var navIdx = 0
+    private var switching = false
+    private var snapColor = 0xFF2B2B2B.toInt()
     private var exactWarn by mutableStateOf(false)
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private val uriRef = AtomicReference<Uri?>(null)
@@ -202,6 +210,8 @@ class EditActivity : ComponentActivity() {
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         val extraUri = intent.getStringExtra(EXTRA_URI)
         isNewMemo = intent.getBooleanExtra(EXTRA_NEW, false)
+        nav = intent.getStringArrayListExtra(EXTRA_NAV) ?: emptyList()
+        navIdx = intent.getIntExtra(EXTRA_NAV_IDX, 0).coerceIn(0, maxOf(0, nav.size - 1))
 
         if (widgetMode) {
             val cfg = store.getConfig(widgetId)
@@ -293,8 +303,41 @@ class EditActivity : ComponentActivity() {
         if (!granted) Toast.makeText(this, "通知が許可されていないため、リマインダーは表示されません（端末の設定で許可できます）", Toast.LENGTH_LONG).show()
     }
 
+    /** 履歴画面（アプリ一覧）で透明に近く見えないよう、画面から離れる間だけ背景に色を付ける */
+    override fun onPause() {
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(snapColor))
+        super.onPause()
+    }
+
+    /** 左右スワイプ: delta=-1 で一覧の上のメモ、+1 で下のメモ */
+    private fun goNeighbor(delta: Int) {
+        if (switching || widgetMode || !loaded) return
+        val ni = navIdx + delta
+        if (ni !in nav.indices) {
+            Toast.makeText(this, if (delta < 0) "一覧の先頭です" else "一覧の末尾です", Toast.LENGTH_SHORT).show()
+            return
+        }
+        switching = true
+        saveNow()
+        FusenApp.scope.launch {
+            FusenApp.saveMutex.withLock { }
+            withContext(Dispatchers.Main) {
+                val list = ArrayList(nav)
+                uriRef.get()?.let { list[navIdx] = it.toString() } // 保存で名前が変わっていても追従する
+                startActivity(
+                    Intent(this@EditActivity, EditActivity::class.java)
+                        .putExtra(EXTRA_URI, list[ni])
+                        .putStringArrayListExtra(EXTRA_NAV, list)
+                        .putExtra(EXTRA_NAV_IDX, ni)
+                )
+                finish()
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         com.ghghuser.fusenizetxt.data.Brightness.apply(this)
     }
 
@@ -463,12 +506,38 @@ class EditActivity : ComponentActivity() {
         }
     }
 
+    /** 先頭行から付けた名前に戻す。番号のない名前でも、その場で付け直す */
     private fun backToAutoName() {
-        manualName = false
-        uriRef.get()?.let { store.setManual(it.toString(), false) }
-        if (widgetMode) store.updateConfig(widgetId) { it.updatePage(page) { p -> p.copy(manualName = false) } }
-        lastSaved = FORCE_RESAVE
+        val ctx = applicationContext
+        val wid = widgetId
+        val pg = page
+        val t = text.text
         saveNow()
+        FusenApp.scope.launch {
+            FusenApp.saveMutex.withLock {
+                val u = uriRef.get() ?: return@withLock
+                val r = MemoRepo.autoRename(ctx, u, t)
+                if (r == null) {
+                    withContext(Dispatchers.Main) { Toast.makeText(ctx, "ファイル名を変更できませんでした", Toast.LENGTH_SHORT).show() }
+                    return@withLock
+                }
+                uriRef.set(r.uri)
+                val st = Store(ctx)
+                st.setManual(r.uri.toString(), false)
+                if (wid != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                    st.updateConfig(wid) { it.updatePage(pg) { p -> p.copy(manualName = false) } }
+                }
+                withContext(Dispatchers.Main) {
+                    fileName = r.name
+                    manualName = false
+                    Toast.makeText(ctx, "ファイル名を「" + r.name.removeSuffix(".txt") + "」にしました（以降、先頭行から自動で付きます）", Toast.LENGTH_LONG).show()
+                }
+                try {
+                    FusenApp.refreshWidgets(ctx)
+                } catch (e: Exception) {
+                }
+            }
+        }
     }
 
     private fun deleteMemo() {
@@ -665,15 +734,19 @@ class EditActivity : ComponentActivity() {
         val focus = remember { FocusRequester() }
         val cs = MaterialTheme.colorScheme
 
-        val appEd = remember { store.editorBgColor ?: store.listBgColor }
+        var appBgSel by remember { mutableStateOf(store.editorBgColor) }
+        var appFgSel by remember { mutableStateOf(store.editorTextColor) }
+        val appEd = appBgSel ?: store.listBgColor
         val editorBg = if (widgetMode) Color(rgbToArgb(shownStyle().bgColor)) else appEd?.let { Color(rgbToArgb(it)) } ?: cs.surfaceVariant
         // 設定・ツールバー部分の色は入力欄に近い色で、少し濃いめにする
         val panelBg = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.09f)
         val panelDark = panelBg.luminance() < 0.5f
         val panelFg = if (panelDark) Color(0xFFF2F2F2) else Color(0xFF212121)
         val panelScheme = tintedScheme(panelBg)
-        val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else if (appEd != null) Color(rgbToArgb(contrastTextRgb(appEd))) else cs.onSurfaceVariant
+        val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else if (appFgSel != null) Color(rgbToArgb(appFgSel!!)) else if (appEd != null) Color(rgbToArgb(contrastTextRgb(appEd))) else cs.onSurfaceVariant
 
+        SideEffect { snapColor = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.55f).copy(alpha = 1f).toArgb() }
+        val navEnabled = !widgetMode && nav.size > 1 && !showSettings
         LaunchedEffect(loaded) {
             if (loaded) {
                 delay(150)
@@ -743,6 +816,35 @@ class EditActivity : ComponentActivity() {
                 color = panelBg,
                 contentColor = panelFg,
                 modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.86f)
+                    .pointerInput(navEnabled) {
+                        if (!navEnabled) return@pointerInput
+                        // 左右のはやいスワイプで前後のメモへ（子の操作は妨げない）
+                        awaitPointerEventScope {
+                            while (true) {
+                                val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                var last = down.position
+                                var lastT = down.uptimeMillis
+                                var released = false
+                                while (true) {
+                                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                    val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                                    last = ch.position
+                                    lastT = ch.uptimeMillis
+                                    if (!ch.pressed) {
+                                        released = true
+                                        break
+                                    }
+                                }
+                                if (released) {
+                                    val dx = last.x - down.position.x
+                                    val dy = last.y - down.position.y
+                                    if (kotlin.math.abs(dx) > 110.dp.toPx() && kotlin.math.abs(dx) > 2.5f * kotlin.math.abs(dy) && lastT - down.uptimeMillis < 500) {
+                                        goNeighbor(if (dx > 0) -1 else 1)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     .pointerInput(Unit) { detectTapGestures { } },
             ) {
                 Column(Modifier.fillMaxSize().padding(8.dp)) {
@@ -774,6 +876,16 @@ class EditActivity : ComponentActivity() {
                                     applyKeepOn(!keepOn)
                                     Toast.makeText(this@EditActivity, if (keepOn) "編集中は画面を消さないようにしました" else "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
                                 })
+                                CompactMenuItem(text = { Text("💡 画面の明るさを固定") }, onClick = {
+                                    menuOpen = false
+                                    dlg = Dlg.BRIGHT
+                                })
+                                if (!widgetMode) {
+                                    CompactMenuItem(text = { Text("🎨 文字色・背景色の変更") }, onClick = {
+                                        menuOpen = false
+                                        dlg = Dlg.COLORS
+                                    })
+                                }
                                 if (widgetMode) {
                                     CompactMenuItem(text = { Text(if (showSettings) "⚙ 設定を閉じる" else "⚙ ウィジェットの設定") }, onClick = {
                                         menuOpen = false
@@ -792,20 +904,6 @@ class EditActivity : ComponentActivity() {
                                         finish()
                                     })
                                 }
-                                CompactMenuItem(text = { Text("🔅 画面の明るさ") }, onClick = {
-                                    menuOpen = false
-                                    dlg = Dlg.BRIGHT
-                                })
-                                CompactMenuItem(text = { Text("📋 一覧を開く") }, onClick = {
-                                    menuOpen = false
-                                    closeAndSave()
-                                    startActivity(Intent(this@EditActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                })
-                                CompactMenuItem(text = { Text("ファイル名を変更") }, onClick = {
-                                    menuOpen = false
-                                    renameText = fileName.removeSuffix(".txt")
-                                    dlg = Dlg.RENAME
-                                })
                                 if (manualName) {
                                     CompactMenuItem(text = { Text("ファイル名を自動に戻す") }, onClick = {
                                         menuOpen = false
@@ -1067,7 +1165,7 @@ class EditActivity : ComponentActivity() {
             )
             Dlg.BRIGHT -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },
-                title = { Text("画面の明るさ") },
+                title = { Text("💡 画面の明るさを固定") },
                 text = {
                     Column {
                         var brOn by remember { mutableStateOf(store.brightnessLock) }
@@ -1088,6 +1186,43 @@ class EditActivity : ComponentActivity() {
                             }
                         }
                         Text("このアプリを開いている間だけ有効です。", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
+                confirmButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("閉じる") } },
+            )
+            Dlg.COLORS -> AlertDialog(
+                onDismissRequest = { dlg = Dlg.NONE },
+                title = { Text("文字色・背景色の変更") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ColorPickerRow("背景色", appBgSel ?: appEd ?: 0xF0F0F0, BG_PRESETS) {
+                            appBgSel = it
+                            store.editorBgColor = it
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("文字色", style = MaterialTheme.typography.labelLarge)
+                            androidx.compose.material3.FilterChip(
+                                selected = appFgSel == null,
+                                onClick = {
+                                    appFgSel = if (appFgSel == null) contrastTextRgb(appBgSel ?: appEd ?: 0xF0F0F0) else null
+                                    store.editorTextColor = appFgSel
+                                },
+                                label = { Text("自動") },
+                            )
+                        }
+                        if (appFgSel != null) {
+                            ColorPickerRow("文字色", appFgSel!!, TEXT_PRESETS) {
+                                appFgSel = it
+                                store.editorTextColor = it
+                            }
+                        }
+                        TextButton(onClick = {
+                            appBgSel = null
+                            appFgSel = null
+                            store.editorBgColor = null
+                            store.editorTextColor = null
+                        }) { Text("既定に戻す（一覧の色に合わせる）") }
+                        Text("アプリ内のすべてのメモに共通です。ウィジェットの色は、ウィジェットの設定で変えます。", style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 confirmButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("閉じる") } },
@@ -1144,7 +1279,7 @@ class EditActivity : ComponentActivity() {
             )
             Dlg.RENAME -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },
-                title = { Text("ファイル名を決める") },
+                title = { Text("ファイル名の変更") },
                 text = {
                     Column {
                         Text("手動で決めると、1行目を書き換えてもファイル名は変わりません。", style = MaterialTheme.typography.bodySmall)

@@ -264,6 +264,20 @@ class Store(ctx: Context) {
             if (v == null) sp.edit().remove("editorBg").apply() else sp.edit().putInt("editorBg", v and 0xFFFFFF).apply()
         }
 
+    /** アプリで開いた時の編集欄の文字色。null = 背景に合わせて自動 */
+    var editorTextColor: Int?
+        get() = if (sp.contains("editorFg")) sp.getInt("editorFg", 0) else null
+        set(v) {
+            if (v == null) sp.edit().remove("editorFg").apply() else sp.edit().putInt("editorFg", v and 0xFFFFFF).apply()
+        }
+
+    /** 一覧の文字色。null = 背景に合わせて自動 */
+    var listTextColor: Int?
+        get() = if (sp.contains("listFg")) sp.getInt("listFg", 0) else null
+        set(v) {
+            if (v == null) sp.edit().remove("listFg").apply() else sp.edit().putInt("listFg", v and 0xFFFFFF).apply()
+        }
+
     /** 画面の明るさをアプリ内で固定するか（既定はオフ） */
     var brightnessLock: Boolean
         get() = sp.getBoolean("brLock", false)

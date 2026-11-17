@@ -101,12 +101,21 @@ class MainActivity : ComponentActivity() {
 
     private var lastOpen = 0L
 
-    private fun openEditor(uri: Uri, isNew: Boolean = false) {
+    private fun openEditor(uri: Uri, isNew: Boolean = false, nav: List<Uri> = emptyList()) {
         // 反応が遅い時の連続タップで編集画面が重なって開くのを防ぐ
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastOpen < 1200) return
         lastOpen = now
-        startActivity(Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()).putExtra(EditActivity.EXTRA_NEW, isNew))
+        val it = Intent(this, EditActivity::class.java).putExtra(EditActivity.EXTRA_URI, uri.toString()).putExtra(EditActivity.EXTRA_NEW, isNew)
+        // 編集画面で左右スワイプして前後のメモへ移れるよう、一覧の並び（開いたメモの前後200件まで）を渡す
+        val idx = nav.indexOf(uri)
+        if (idx >= 0) {
+            val from = maxOf(0, idx - 200)
+            val sub = nav.subList(from, minOf(nav.size, idx + 201))
+            it.putStringArrayListExtra(EditActivity.EXTRA_NAV, ArrayList(sub.map { u -> u.toString() }))
+            it.putExtra(EditActivity.EXTRA_NAV_IDX, idx - from)
+        }
+        startActivity(it)
     }
 
     private fun loadRows(store: Store, tab: Int): List<MemoRow> {
@@ -138,6 +147,7 @@ class MainActivity : ComponentActivity() {
         var rows by remember { mutableStateOf<List<MemoRow>>(emptyList()) }
         var listBg by remember { mutableStateOf(store.listBgColor) }
         var listAlpha by remember { mutableIntStateOf(store.listBgAlpha) }
+        var listFg by remember { mutableStateOf(store.listTextColor) }
         var storage by remember { mutableStateOf(MemoRepo.storageLabel(this)) }
         var paper by remember { mutableIntStateOf(store.appPaper) }
         var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -151,6 +161,7 @@ class MainActivity : ComponentActivity() {
                     storage = MemoRepo.storageLabel(this@MainActivity)
                     listBg = store.listBgColor
                     listAlpha = store.listBgAlpha
+                    listFg = store.listTextColor
                     paper = store.appPaper
                     tick++
                     // 直前の編集画面の保存・改名が少し遅れて終わる場合に備えて、もう一度読み直す
@@ -182,7 +193,7 @@ class MainActivity : ComponentActivity() {
 
         val cs = listBg?.let { tintedScheme(Color(rgbToArgb(it))) } ?: MaterialTheme.colorScheme
         val bg = listBg?.let { Color(rgbToArgb(it, listAlpha)) } ?: cs.background.copy(alpha = listAlpha / 255f)
-        val onBg = if (listBg == null) cs.onBackground else cs.onSurface
+        val onBg = listFg?.let { Color(rgbToArgb(it)) } ?: if (listBg == null) cs.onBackground else cs.onSurface
 
         MaterialTheme(colorScheme = cs) {
         Scaffold(
@@ -274,7 +285,7 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             val k = r.uri.toString()
                                             if (selected.isNotEmpty()) selected = if (k in selected) selected - k else selected + k
-                                            else openEditor(r.uri)
+                                            else openEditor(r.uri, nav = sorted.map { it.uri })
                                         },
                                         onLongClick = {
                                             val k = r.uri.toString()

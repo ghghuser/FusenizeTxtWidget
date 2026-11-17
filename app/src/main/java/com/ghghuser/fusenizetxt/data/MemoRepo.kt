@@ -595,6 +595,13 @@ object MemoRepo {
         return SaveOutcome(Saved(cur, name))
     }
 
+    /** 先頭行から名前を付け直す（番号がなければ新しい番号を振る） */
+    fun autoRename(ctx: Context, uri: Uri, text: String): Saved? {
+        val name = displayName(ctx, uri) ?: return null
+        val num = numberOf(name) ?: ((listTxt(ctx).mapNotNull { numberOf(it.name) }.maxOrNull() ?: 0L) + 1)
+        return renameInternal(ctx, uri, "${num}_${titleFor(text)}.txt")
+    }
+
     /** 手動でファイル名を決める（拡張子は自動で .txt） */
     fun renameTo(ctx: Context, uri: Uri, base: String): Saved? {
         val b = sanitizeBase(base)

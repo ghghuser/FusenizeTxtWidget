@@ -47,6 +47,7 @@ import com.ghghuser.fusenizetxt.data.Importer
 import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
 import com.ghghuser.fusenizetxt.data.rgbToArgb
+import com.ghghuser.fusenizetxt.data.contrastTextRgb
 import androidx.compose.ui.graphics.Color
 import com.ghghuser.fusenizetxt.data.ZipTools
 import java.text.SimpleDateFormat
@@ -246,6 +247,24 @@ class SettingsActivity : ComponentActivity() {
                     listBg = it
                     store.listBgColor = it
                 }
+                var listFg by remember { mutableStateOf(store.listTextColor) }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("一覧の文字色", style = MaterialTheme.typography.labelLarge)
+                    androidx.compose.material3.FilterChip(
+                        selected = listFg == null,
+                        onClick = {
+                            listFg = if (listFg == null) (if (listBg != null) contrastTextRgb(listBg!!) else 0x212121) else null
+                            store.listTextColor = listFg
+                        },
+                        label = { Text("自動") },
+                    )
+                }
+                if (listFg != null) {
+                    ColorPickerRow("文字色", listFg!!, TEXT_PRESETS) {
+                        listFg = it
+                        store.listTextColor = it
+                    }
+                }
                 var appPaper by remember { mutableIntStateOf(store.appPaper) }
                 SliderRow("質感の強さ（ノイズ。一覧・編集欄。0でなし）", appPaper, 0, 100) {
                     appPaper = it
@@ -257,21 +276,14 @@ class SettingsActivity : ComponentActivity() {
                 }
                 TextButton(onClick = {
                     listBg = null
+                    listFg = null
+                    store.listTextColor = null
                     listAlpha = 200
                     store.listBgColor = null
                     store.listBgAlpha = 200
                 }) { Text("テーマ既定に戻す") }
                 HorizontalDivider()
                 Text("画面の明るさ", style = MaterialTheme.typography.titleMedium)
-                var edBg by remember { mutableStateOf(store.editorBgColor) }
-                ColorPickerRow("アプリで開いたときの編集欄の色", edBg ?: (listBg ?: 0xF0F0F0), BG_PRESETS) {
-                    edBg = it
-                    store.editorBgColor = it
-                }
-                TextButton(onClick = {
-                    edBg = null
-                    store.editorBgColor = null
-                }) { Text("編集欄の色を既定に戻す") }
                 var brOn by remember { mutableStateOf(store.brightnessLock) }
                 var brLv by remember { mutableIntStateOf(store.brightnessLevel) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
