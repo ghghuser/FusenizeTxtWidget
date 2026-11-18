@@ -33,6 +33,7 @@ class NoteListService : RemoteViewsService() {
             } catch (e: Exception) {
                 emptyList()
             }
+            Store(ctx).debugLog("  一覧データ読込 id=$id 表示中=${Store(ctx).getConfig(id).cur + 1} 行数=${lines.size}")
         }
 
         override fun onDestroy() {
