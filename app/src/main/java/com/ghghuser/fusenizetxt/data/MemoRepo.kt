@@ -722,7 +722,7 @@ object Drafts {
 
     private fun file(ctx: Context, uri: Uri): File {
         val dir = File(ctx.filesDir, "drafts").apply { mkdirs() }
-        val h = MessageDigest.getInstance("SHA-1").digest(uri.toString().toByteArray())
+        val h = MessageDigest.getInstance("SHA-1").digest(uri.toString().toByteArray()) // NOSONAR 下書きのファイル名を作るだけで、秘匿用途ではない
             .joinToString("") { "%02x".format(it) }
         return File(dir, "$h.txt")
     }

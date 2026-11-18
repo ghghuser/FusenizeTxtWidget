@@ -389,7 +389,14 @@ class SettingsActivity : ComponentActivity() {
                 var stamp by remember { mutableStateOf(store.debugStamp) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("ウィジェット上部に更新時刻を表示", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = stamp, onCheckedChange = { stamp = it; store.debugStamp = it })
+                    Switch(checked = stamp, onCheckedChange = {
+                        stamp = it
+                        store.debugStamp = it
+                        try {
+                            FusenApp.refreshWidgets(applicationContext) // 切り替えをすぐウィジェットに反映
+                        } catch (_: Exception) {
+                        }
+                    })
                 }
                 Row {
                     TextButton(onClick = { dbg = store.debugLogText }) { Text("更新") }

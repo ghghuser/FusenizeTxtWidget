@@ -26,14 +26,16 @@ class NoteListService : RemoteViewsService() {
         override fun onCreate() {}
 
         override fun onDataSetChanged() {
+            var shownPage = -1
             lines = try {
                 val cfg = Store(ctx).getConfig(id)
+                shownPage = cfg.cur
                 val (text, placeholder) = WidgetRender.resolveText(ctx, cfg, WidgetRender.MAX_LIST_CHARS)
                 if (placeholder) emptyList() else text.split('\n').take(3000)
             } catch (e: Exception) {
                 emptyList()
             }
-            Store(ctx).debugLog("  一覧データ読込 id=$id 表示中=${Store(ctx).getConfig(id).cur + 1} 行数=${lines.size}")
+            Store(ctx).debugLog("  一覧データ読込 id=$id 表示中=${shownPage + 1} 行数=${lines.size}")
         }
 
         override fun onDestroy() {

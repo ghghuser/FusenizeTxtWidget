@@ -17,7 +17,7 @@ object History {
     data class Version(val file: File, val time: Long)
 
     private fun dirFor(ctx: Context, uri: String): File {
-        val h = MessageDigest.getInstance("SHA-1").digest(uri.toByteArray())
+        val h = MessageDigest.getInstance("SHA-1").digest(uri.toByteArray()) // NOSONAR 保存先フォルダ名を作るだけで、秘匿用途ではない（変えると既存の履歴が読めなくなる）
             .joinToString("") { "%02x".format(it) }
         return File(File(ctx.filesDir, "history"), h)
     }
