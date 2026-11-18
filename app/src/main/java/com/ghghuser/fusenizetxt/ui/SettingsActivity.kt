@@ -47,6 +47,7 @@ import com.ghghuser.fusenizetxt.data.Importer
 import com.ghghuser.fusenizetxt.data.MemoRepo
 import com.ghghuser.fusenizetxt.data.Store
 import com.ghghuser.fusenizetxt.data.rgbToArgb
+import com.ghghuser.fusenizetxt.FusenApp
 import com.ghghuser.fusenizetxt.data.contrastTextRgb
 import androidx.compose.ui.graphics.Color
 import com.ghghuser.fusenizetxt.data.ZipTools
