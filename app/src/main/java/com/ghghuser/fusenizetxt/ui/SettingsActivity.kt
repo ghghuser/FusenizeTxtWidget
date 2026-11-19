@@ -381,6 +381,23 @@ class SettingsActivity : ComponentActivity() {
                 HorizontalDivider()
 
                 Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
+                var showLicense by remember { mutableStateOf(false) }
+                TextButton(onClick = { showLicense = true }) { Text("ライセンス（商用利用・再配布禁止）") }
+                if (showLicense) {
+                    val licenseText = remember {
+                        try {
+                            resources.openRawResource(com.ghghuser.fusenizetxt.R.raw.license).bufferedReader().use { it.readText() }
+                        } catch (_: Exception) {
+                            "ライセンス文を読み込めませんでした。"
+                        }
+                    }
+                    AlertDialog(
+                        onDismissRequest = { showLicense = false },
+                        title = { Text("ライセンス") },
+                        text = { Text(licenseText, modifier = Modifier.verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
+                        confirmButton = { TextButton(onClick = { showLicense = false }) { Text("閉じる") } },
+                    )
+                }
                 store.lastWidgetError.takeIf { it.isNotBlank() }?.let {
                     Text("ウィジェット描画の最後のエラー: $it", style = MaterialTheme.typography.labelSmall)
                 }

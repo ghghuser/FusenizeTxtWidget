@@ -69,12 +69,7 @@ object WidgetRender {
             } catch (_: Throwable) {
             }
         }
-        if (lastUseList[id] == true) {
-            try {
-                mgr.notifyAppWidgetViewDataChanged(id, R.id.w_list) // スクロール表示の中身を読み直す
-            } catch (_: Throwable) {
-            }
-        }
+
     }
 
     /** (表示テキスト, プレースホルダかどうか) */
@@ -215,7 +210,8 @@ object WidgetRender {
                 R.id.w_list,
                 Intent(ctx, NoteListService::class.java).apply {
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    data = Uri.parse("fusen://list/$id")
+                    // 更新のたびに別のつなぎ先として扱わせ、ランチャーに一覧ごと作り直させる（古い一覧が残って表示更新を邪魔するのを避ける）
+                    data = Uri.parse("fusen://list/$id/${System.currentTimeMillis()}")
                 },
             )
         }

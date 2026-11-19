@@ -1,0 +1,36 @@
+FusenizeTxt License (Non-Commercial / No Redistribution)
+Copyright (c) 2026 ghghuser. All rights reserved.
+
+[English]
+1. Permitted: Any individual may use this software (the app, its source code and
+   related files) free of charge, for personal and non-commercial purposes only.
+2. Prohibited without the copyright holder's prior written permission:
+   a. Commercial use of any kind (selling, paid services, advertising, or use
+      within a business or for a commercial purpose).
+   b. Redistribution, re-publishing or sharing of the app (APK), the source code,
+      or any modified version, in whole or in part, by any means (including
+      uploading to other repositories, app stores or file-sharing services).
+   c. Sublicensing.
+3. Viewing the source code on GitHub is allowed. Forking on GitHub is allowed only
+   to the extent GitHub's Terms of Service provide for it, for personal viewing;
+   a fork must not be used to redistribute this software.
+4. Third-party components (AndroidX, Jetpack Compose, Kotlin, etc.) remain under
+   their own licenses; this license applies only to the original code and assets
+   of this project.
+5. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. THE AUTHOR IS
+   NOT LIABLE FOR ANY DAMAGES OR DATA LOSS ARISING FROM ITS USE.
+
+[日本語]
+1. 許可: 個人が、非営利の目的に限り、無償でこのソフトウェア（アプリ、ソースコード、
+   関連ファイル）を利用できます。
+2. 著作権者の事前の書面による許可なく、次のことを禁止します。
+   a. あらゆる商用利用（販売、有償サービス、広告、事業・営利目的での利用）
+   b. アプリ（APK）・ソースコード・改変物の、全部または一部の再配布・再公開・共有
+      （他のリポジトリ、アプリストア、ファイル共有サービスへのアップロードを含む）
+   c. サブライセンス
+3. GitHub上でのソースコードの閲覧は自由です。GitHub上のフォークは、GitHubの利用規約が
+   認める範囲で、個人の閲覧のためにのみ許可します。フォークを再配布に使うことはできません。
+4. 第三者のコンポーネント（AndroidX、Jetpack Compose、Kotlin など）は、それぞれの
+   ライセンスに従います。本ライセンスは、このプロジェクト独自のコードと素材にのみ適用されます。
+5. 本ソフトウェアは現状のまま提供され、いかなる保証もありません。利用によって生じた
+   損害やデータの損失について、作者は責任を負いません。

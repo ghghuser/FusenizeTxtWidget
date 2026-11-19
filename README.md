@@ -33,6 +33,10 @@
 - 前景（図柄）: `app/src/main/res/drawable/ic_launcher_foreground.xml`（ベクター）
 - 構成: `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`
 
+## ライセンス
+
+商用利用・再配布を禁止します（個人の非営利利用のみ無償で可）。全文は [LICENSE](LICENSE) とアプリの設定画面の最下部にあります。第三者のライブラリはそれぞれのライセンスに従います。
+
 ## 開発者向けメモ
 
 - 構成: `ui/`（Compose画面: 一覧 `MainActivity`・編集 `EditActivity`・設定 `SettingsActivity`・ウィジェット設定 `ConfigActivity`/`StylePanel`）、`widget/`（`WidgetRender` が RemoteViews を組み立て、長文は `NoteListService` の ListView でスクロール）、`data/`（`Store`=SharedPreferences、`MemoRepo`=txtの読み書き、`Reminders`/`Backup`/`History` ほか）
