@@ -174,8 +174,6 @@ class EditActivity : ComponentActivity() {
     private var navIdx = 0
     private var switching = false
     private var wantKb = true
-    private var keepOnStop = false // 共有など別アプリへ移る時は、戻ってこれるよう編集画面を残す
-    private var snapColor = 0xFF2B2B2B.toInt()
     private var exactWarn by mutableStateOf(false)
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private val uriRef = AtomicReference<Uri?>(null)
@@ -214,7 +212,7 @@ class EditActivity : ComponentActivity() {
         widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         val extraUri = intent.getStringExtra(EXTRA_URI)
         isNewMemo = intent.getBooleanExtra(EXTRA_NEW, false)
-        // 履歴画面（タスク一覧）で背後のホーム画面が透けて見えないよう、画面のサムネイルを使わない
+        // タスク一覧（最近使ったアプリ）のサムネイルにメモの内容が写らないようにする
         if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         wantKb = intent.getBooleanExtra(EXTRA_KB, true)
         if (intent.hasExtra(EXTRA_KB)) {
@@ -358,7 +356,6 @@ class EditActivity : ComponentActivity() {
     /** ウィジェットの編集画面: 左右スワイプで前後のタブへ（端で止まる。メモ未設定のタブは選択画面を開く） */
     private fun goPage(delta: Int) {
         val cfg = store.getConfig(widgetId)
-        store.debugLog("編集画面スワイプ タブ${page + 1} 方向=$delta 全${cfg.pages.size}")
         val to = page + delta
         if (to !in cfg.pages.indices) {
             Toast.makeText(this, if (delta < 0) "最初のタブです" else "最後のタブです", Toast.LENGTH_SHORT).show()
@@ -416,7 +413,6 @@ class EditActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        keepOnStop = false
         if (!receiverRegistered) {
             ContextCompat.registerReceiver(
                 this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED
@@ -427,13 +423,6 @@ class EditActivity : ComponentActivity() {
 
     override fun onStop() {
         saveNow()
-        if (widgetMode) {
-            try {
-                FusenApp.refreshWidgets(applicationContext) // 設定の変更（ページ数など）を閉じる時にも必ず反映
-            } catch (e: Exception) {
-            }
-        }
-        
         if (receiverRegistered) {
             try {
                 unregisterReceiver(screenOffReceiver)
@@ -506,7 +495,6 @@ class EditActivity : ComponentActivity() {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
             .putExtra(Intent.EXTRA_SUBJECT, fileName.removeSuffix(".txt").removeSuffix(".TXT"))
             .putExtra(Intent.EXTRA_TEXT, text.text)
-        keepOnStop = true
         startActivity(Intent.createChooser(send, "共有先を選ぶ"))
     }
 
@@ -532,7 +520,6 @@ class EditActivity : ComponentActivity() {
             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            keepOnStop = true
             startActivity(Intent.createChooser(send, "共有先を選ぶ（txtファイル・UTF-8）"))
         }
     }
@@ -809,7 +796,6 @@ class EditActivity : ComponentActivity() {
         val panelScheme = tintedScheme(panelBg)
         val editorFg = if (widgetMode) Color(rgbToArgb(shownStyle().effectiveTextRgb())) else if (appFgSel != null) Color(rgbToArgb(appFgSel!!)) else if (appEd != null) Color(rgbToArgb(contrastTextRgb(appEd))) else cs.onSurfaceVariant
 
-        SideEffect { snapColor = androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.55f).copy(alpha = 1f).toArgb() }
         val navEnabled = (if (widgetMode) pageCount > 1 else nav.size > 1) && !showSettings
         LaunchedEffect(loaded) {
             if (loaded && wantKb) {
@@ -837,10 +823,6 @@ class EditActivity : ComponentActivity() {
                 val bgc = pageBg
                 store.updateConfig(widgetId) {
                     it.copy(style = style).withPageCount(pageCount).updatePage(pg) { p -> p.copy(bgColor = bgc) }
-                }
-                try {
-                    FusenApp.refreshWidgets(applicationContext) // すぐ反映（ページ数の変更など）
-                } catch (e: Exception) {
                 }
                 delay(200)
                 try {
@@ -910,9 +892,6 @@ class EditActivity : ComponentActivity() {
                                 if (released) {
                                     val dx = last.x - down.position.x
                                     val dy = last.y - down.position.y
-                                    if (kotlin.math.abs(dx) > 60.dp.toPx()) {
-                                        store.debugLog("スワイプ判定 dx=${dx.toInt()} dy=${dy.toInt()} ${lastT - down.uptimeMillis}ms")
-                                    }
                                     if (kotlin.math.abs(dx) > 110.dp.toPx() && kotlin.math.abs(dx) > 2.5f * kotlin.math.abs(dy) && lastT - down.uptimeMillis < 500) {
                                         goNeighbor(if (dx > 0) -1 else 1)
                                     }
@@ -1153,7 +1132,6 @@ class EditActivity : ComponentActivity() {
                 confirmButton = {
                     TextButton(onClick = {
                         exactWarn = false
-                        keepOnStop = true
                         try {
                             startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).setData(android.net.Uri.parse("package:$packageName")))
                         } catch (e: Exception) {
