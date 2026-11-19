@@ -51,6 +51,7 @@ object WidgetRender {
     // 更新が同時に走ると、古い状態で作った表示が後から上書きされる（背景色・タップ先が前のページのまま残る）ため、
     // 1つずつ順番に、実行時点の最新の設定から作る
     private val updateLock = Any()
+    private val lastUseList = java.util.concurrent.ConcurrentHashMap<Int, Boolean>()
 
     fun update(ctx: Context, mgr: AppWidgetManager, id: Int) = synchronized(updateLock) {
         try {
@@ -68,10 +69,7 @@ object WidgetRender {
             } catch (_: Throwable) {
             }
         }
-        try {
-            mgr.notifyAppWidgetViewDataChanged(id, R.id.w_list) // スクロール表示の中身を読み直す
-        } catch (_: Throwable) {
-        }
+
     }
 
     /** (表示テキスト, プレースホルダかどうか) */
@@ -156,10 +154,14 @@ object WidgetRender {
         fun px(dp: Int) = (dp * d + 0.5f).toInt()
 
         Store(ctx).debugLog("描画 id=$id 表示中=${page + 1} 背景=%06X 文字=%d%s".format(s.bgColor, text.length, if (safe) " 簡易" else ""))
+        val useListEarly = !safe && s.scroll && !placeholder && runCatching { likelyOverflows(ctx, id, cfg, s, text) }.getOrDefault(false)
+        lastUseList[id] = useListEarly
         val rv = RemoteViews(
             ctx.packageName,
-            // ページごとに別のレイアウトにして、ページを切り替えるたびにランチャーに表示を作り直させる（背景色・タップ先が前のページのまま残るのを防ぐ）
-            when (page) { 1 -> R.layout.widget_note_p1; 2 -> R.layout.widget_note_p2; 3 -> R.layout.widget_note_p3; 4 -> R.layout.widget_note_p4; else -> R.layout.widget_note_p0 },
+            // ページごと・一覧の有無ごとに別のレイアウトにして、切り替えるたびにランチャーに表示を作り直させる。
+            // 一覧を使わないページには一覧（ListView）自体を含めない
+            if (useListEarly) when (page) { 1 -> R.layout.widget_note_l1; 2 -> R.layout.widget_note_l2; 3 -> R.layout.widget_note_l3; 4 -> R.layout.widget_note_l4; else -> R.layout.widget_note_l0 }
+            else when (page) { 1 -> R.layout.widget_note_p1; 2 -> R.layout.widget_note_p2; 3 -> R.layout.widget_note_p3; 4 -> R.layout.widget_note_p4; else -> R.layout.widget_note_p0 },
         )
 
         // 余白（外側: 枠と背景の間、内側: 背景と文字の間）
@@ -193,7 +195,6 @@ object WidgetRender {
         if (face != Typeface.NORMAL && text.isNotEmpty()) {
             styled.setSpan(StyleSpan(face), 0, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        val useListEarly = !safe && s.scroll && !placeholder && runCatching { likelyOverflows(ctx, id, cfg, s, text) }.getOrDefault(false)
         val fgRgb = s.effectiveTextRgb()
         val fg = if (placeholder) (fgRgb and 0xFFFFFF) or (0x99 shl 24) else rgbToArgb(fgRgb)
         rv.setTextViewText(tid, if (useListEarly) "" else styled)
@@ -202,26 +203,30 @@ object WidgetRender {
 
         // 長文はリスト表示に切り替えてスクロールできるようにする（短文は従来どおり配置指定を反映）
         val useList = useListEarly
-        rv.setViewVisibility(R.id.w_list, if (useList) View.VISIBLE else View.GONE)
         if (useList) {
             for (t in intArrayOf(R.id.w_t_l, R.id.w_t_c, R.id.w_t_r)) rv.setViewVisibility(t, View.GONE)
+            rv.setViewVisibility(R.id.w_list, View.VISIBLE)
+            rv.setRemoteAdapter(
+                R.id.w_list,
+                Intent(ctx, NoteListService::class.java).apply {
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    // 更新のたびに別のつなぎ先として扱わせ、ランチャーに一覧ごと作り直させる（古い一覧が残って表示更新を邪魔するのを避ける）
+                    data = Uri.parse("fusen://list/$id/${System.currentTimeMillis()}")
+                },
+            )
         }
-        // 一覧のつなぎ先はページに関わらず常に同じ内容で毎回設定する（ページごとに変えたり、有る無しを切り替えたりしない）
-        rv.setRemoteAdapter(
-            R.id.w_list,
-            Intent(ctx, NoteListService::class.java).apply {
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                data = Uri.parse("fusen://list/$id")
-            },
-        )
         Store(ctx).debugLog("  一覧表示=$useList 文字=${text.length}")
 
         // 上部のタイトル（ファイル名）。ウィジェットの設定でオン/オフ・文字サイズを指定
-        val titleStr = if (!safe && s.showTitle && cfg.fileUri != null) {
+        val titleStr0 = if (!safe && s.showTitle && cfg.fileUri != null) {
             val uu = Uri.parse(cfg.fileUri)
             val nm = MemoRepo.displayName(ctx, uu)
             nm?.let { MemoRepo.shownTitle(it, cfg.manualName || Store(ctx).isManual(cfg.fileUri!!)) }
         } else null
+        // 調査用: ウィジェット上部に「何ページ目として・いつ作った表示か」を出す（設定画面でオン）
+        val titleStr = if (Store(ctx).debugStamp) {
+            "[調査] ${page + 1}ページ " + java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+        } else titleStr0
         if (!titleStr.isNullOrBlank()) {
             val ts = SpannableString(titleStr)
             ts.setSpan(StyleSpan(Typeface.BOLD), 0, ts.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -247,13 +252,15 @@ object WidgetRender {
             // 以前の編集画面が残っていると別ページの内容が開くため、毎回作り直す
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
-        rv.setPendingIntentTemplate(
-            R.id.w_list,
-            PendingIntent.getActivity(
-                ctx, 200000 + id * 10 + page, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or (if (android.os.Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0),
-            ),
-        )
+        if (useList) {
+            rv.setPendingIntentTemplate(
+                R.id.w_list,
+                PendingIntent.getActivity(
+                    ctx, 200000 + id * 10 + page, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or (if (android.os.Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0),
+                ),
+            )
+        }
         rv.setOnClickPendingIntent(
             R.id.w_card,
             PendingIntent.getActivity(ctx, id * 10 + page, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE),

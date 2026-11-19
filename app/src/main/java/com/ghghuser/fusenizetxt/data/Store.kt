@@ -277,6 +277,11 @@ class Store(ctx: Context) {
         }
     }
 
+    /** 調査用: ウィジェットの上部に更新時刻を表示する */
+    var debugStamp: Boolean
+        get() = sp.getBoolean("dbgStamp", false)
+        set(v) { sp.edit().putBoolean("dbgStamp", v).apply() }
+
     var debugLogText: String
         get() = sp.getString("dbgLog", "") ?: ""
         set(v) { sp.edit().putString("dbgLog", v).apply() }
