@@ -51,19 +51,12 @@ object WidgetRender {
     // 更新が同時に走ると、古い状態で作った表示が後から上書きされる（背景色・タップ先が前のページのまま残る）ため、
     // 1つずつ順番に、実行時点の最新の設定から作る
     private val updateLock = Any()
-    private val lastUseList = java.util.concurrent.ConcurrentHashMap<Int, Boolean>()
 
     fun update(ctx: Context, mgr: AppWidgetManager, id: Int) = synchronized(updateLock) {
         try {
             mgr.updateAppWidget(id, build(ctx, id))
-            Store(ctx).debugLog("  更新を送信 id=$id")
         } catch (e: Throwable) {
             // 描画に失敗すると古い表示が残る（背景色やタップ先が前のページのまま）ため、簡易表示で必ず更新する
-            try {
-                val st = e.stackTrace.firstOrNull()
-                Store(ctx).lastWidgetError = "${e.javaClass.simpleName}: ${e.message} @ ${st?.fileName}:${st?.lineNumber}"
-            } catch (_: Throwable) {
-            }
             try {
                 mgr.updateAppWidget(id, build(ctx, id, safe = true))
             } catch (_: Throwable) {
@@ -118,32 +111,6 @@ object WidgetRender {
         return lines >= visibleLines * 0.85f
     }
 
-    /** 角丸の単色の背景画像（下にタブがある時は下の角を付けない）。大きすぎないよう縮小して作り、fitXYで引き伸ばす */
-    private fun bgBitmap(ctx: Context, id: Int, argb: Int, hasTabs: Boolean): android.graphics.Bitmap {
-        val d = ctx.resources.displayMetrics.density
-        var wdp = 160
-        var hdp = 160
-        try {
-            val o = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(id)
-            wdp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 160).coerceAtLeast(40)
-            hdp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160).coerceAtLeast(40)
-        } catch (_: Throwable) {
-        }
-        val wpx = wdp * d
-        val hpx = hdp * d
-        val k = minOf(1f, Math.sqrt(160000.0 / (wpx * hpx)).toFloat())
-        val w = (wpx * k).toInt().coerceAtLeast(16)
-        val h = (hpx * k).toInt().coerceAtLeast(16)
-        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
-        val r = 8f * d * k
-        val br = if (hasTabs) 0f else r
-        val path = android.graphics.Path().apply {
-            addRoundRect(android.graphics.RectF(0f, 0f, w.toFloat(), h.toFloat()), floatArrayOf(r, r, r, r, br, br, br, br), android.graphics.Path.Direction.CW)
-        }
-        android.graphics.Canvas(bmp).drawPath(path, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = argb })
-        return bmp
-    }
-
     private fun build(ctx: Context, id: Int, safe: Boolean = false): RemoteViews {
         val cfg = Store(ctx).getConfig(id)
         val page = cfg.cur
@@ -153,15 +120,11 @@ object WidgetRender {
         val d = ctx.resources.displayMetrics.density
         fun px(dp: Int) = (dp * d + 0.5f).toInt()
 
-        Store(ctx).debugLog("描画 id=$id 表示中=${page + 1} 背景=%06X 文字=%d%s".format(s.bgColor, text.length, if (safe) " 簡易" else ""))
-        val useListEarly = !safe && s.scroll && !placeholder && runCatching { likelyOverflows(ctx, id, cfg, s, text) }.getOrDefault(false)
-        lastUseList[id] = useListEarly
+        val useList = !safe && s.scroll && !placeholder && runCatching { likelyOverflows(ctx, id, cfg, s, text) }.getOrDefault(false)
         val rv = RemoteViews(
             ctx.packageName,
-            // ページごと・一覧の有無ごとに別のレイアウトにして、切り替えるたびにランチャーに表示を作り直させる。
-            // 一覧を使わないページには一覧（ListView）自体を含めない
-            if (useListEarly) when (page) { 1 -> R.layout.widget_note_l1; 2 -> R.layout.widget_note_l2; 3 -> R.layout.widget_note_l3; 4 -> R.layout.widget_note_l4; else -> R.layout.widget_note_l0 }
-            else when (page) { 1 -> R.layout.widget_note_p1; 2 -> R.layout.widget_note_p2; 3 -> R.layout.widget_note_p3; 4 -> R.layout.widget_note_p4; else -> R.layout.widget_note_p0 },
+            // 一覧（ListView）は、長文をスクロール表示するページだけに含める（一覧があるとランチャーの表示更新が滞ることがあるため）
+            if (useList) R.layout.widget_note_list else R.layout.widget_note,
         )
 
         // 余白（外側: 枠と背景の間、内側: 背景と文字の間）
@@ -171,8 +134,9 @@ object WidgetRender {
         // 背景色と透過度（形は角丸のdrawable、色はフィルタ、透過度はimageAlpha）
         val hasTabs = cfg.pages.size > 1
         rv.setImageViewResource(R.id.w_paper, if (hasTabs) R.drawable.widget_note_paper_top else R.drawable.widget_note_paper)
-        // 背景は色と透過度を焼き込んだ画像で渡す（色フィルタ方式だと、ページを切り替えても前の色のまま残る端末があるため）
-        rv.setImageViewBitmap(R.id.w_bg, bgBitmap(ctx, id, rgbToArgb(s.bgColor, s.bgAlpha.coerceIn(0, 255)), hasTabs))
+        rv.setImageViewResource(R.id.w_bg, if (hasTabs) R.drawable.widget_note_bg_top else R.drawable.widget_note_bg)
+        rv.setInt(R.id.w_bg, "setColorFilter", rgbToArgb(s.bgColor))
+        rv.setInt(R.id.w_bg, "setImageAlpha", s.bgAlpha.coerceIn(0, 255))
         rv.setViewVisibility(R.id.w_paper, if (s.paper) android.view.View.VISIBLE else android.view.View.GONE)
         rv.setInt(R.id.w_paper, "setImageAlpha", (s.bgAlpha.coerceIn(0, 255) * s.paperStrength / 100).coerceIn(0, 255))
 
@@ -197,12 +161,11 @@ object WidgetRender {
         }
         val fgRgb = s.effectiveTextRgb()
         val fg = if (placeholder) (fgRgb and 0xFFFFFF) or (0x99 shl 24) else rgbToArgb(fgRgb)
-        rv.setTextViewText(tid, if (useListEarly) "" else styled)
+        rv.setTextViewText(tid, if (useList) "" else styled)
         rv.setTextViewTextSize(tid, TypedValue.COMPLEX_UNIT_SP, s.textSizeSp.toFloat())
         rv.setTextColor(tid, fg)
 
         // 長文はリスト表示に切り替えてスクロールできるようにする（短文は従来どおり配置指定を反映）
-        val useList = useListEarly
         if (useList) {
             for (t in intArrayOf(R.id.w_t_l, R.id.w_t_c, R.id.w_t_r)) rv.setViewVisibility(t, View.GONE)
             rv.setViewVisibility(R.id.w_list, View.VISIBLE)
@@ -215,18 +178,13 @@ object WidgetRender {
                 },
             )
         }
-        Store(ctx).debugLog("  一覧表示=$useList 文字=${text.length}")
 
         // 上部のタイトル（ファイル名）。ウィジェットの設定でオン/オフ・文字サイズを指定
-        val titleStr0 = if (!safe && s.showTitle && cfg.fileUri != null) {
+        val titleStr = if (!safe && s.showTitle && cfg.fileUri != null) {
             val uu = Uri.parse(cfg.fileUri)
             val nm = MemoRepo.displayName(ctx, uu)
             nm?.let { MemoRepo.shownTitle(it, cfg.manualName || Store(ctx).isManual(cfg.fileUri!!)) }
         } else null
-        // 調査用: ウィジェット上部に「何ページ目として・いつ作った表示か」を出す（設定画面でオン）
-        val titleStr = if (Store(ctx).debugStamp) {
-            "[調査] ${page + 1}ページ " + java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
-        } else titleStr0
         if (!titleStr.isNullOrBlank()) {
             val ts = SpannableString(titleStr)
             ts.setSpan(StyleSpan(Typeface.BOLD), 0, ts.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -342,9 +300,7 @@ class PageSwitchReceiver : BroadcastReceiver() {
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
         val app = context.applicationContext
         val st = Store(app)
-        val before = st.getConfig(id).cur
         st.updateConfig(id) { it.copy(current = to.coerceIn(0, it.pages.size - 1)) }
-        st.debugLog("タブ押下 id=$id ${before + 1}→${to + 1} 保存後=${st.getConfig(id).cur + 1}")
         val pending = goAsync()
         FusenApp.scope.launch {
             try {

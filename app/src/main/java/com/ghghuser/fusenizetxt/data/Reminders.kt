@@ -163,6 +163,14 @@ object Reminders {
             .setContentIntent(pi)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            // ロック画面ではメモの内容を隠す（タイトルだけの簡易表示にする）
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(ctx, CHANNEL)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("メモのリマインダー")
+                    .build()
+            )
             .build()
         val nm = NotificationManagerCompat.from(ctx)
         if (nm.areNotificationsEnabled()) {
