@@ -398,29 +398,6 @@ class SettingsActivity : ComponentActivity() {
                         confirmButton = { TextButton(onClick = { showLicense = false }) { Text("閉じる") } },
                     )
                 }
-                store.lastWidgetError.takeIf { it.isNotBlank() }?.let {
-                    Text("ウィジェット描画の最後のエラー: $it", style = MaterialTheme.typography.labelSmall)
-                }
-                var dbg by remember { mutableStateOf(store.debugLogText) }
-                HorizontalDivider()
-                Text("ウィジェット動作ログ（不具合調査用・新しい順）", style = MaterialTheme.typography.labelLarge)
-                var stamp by remember { mutableStateOf(store.debugStamp) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("ウィジェット上部に更新時刻を表示", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = stamp, onCheckedChange = {
-                        stamp = it
-                        store.debugStamp = it
-                        try {
-                            FusenApp.refreshWidgets(applicationContext) // 切り替えをすぐウィジェットに反映
-                        } catch (_: Exception) {
-                        }
-                    })
-                }
-                Row {
-                    TextButton(onClick = { dbg = store.debugLogText }) { Text("更新") }
-                    TextButton(onClick = { store.debugLogText = ""; dbg = "" }) { Text("消す") }
-                }
-                Text(dbg.ifBlank { "（まだありません）" }, style = MaterialTheme.typography.labelSmall)
             }
         }
         }
