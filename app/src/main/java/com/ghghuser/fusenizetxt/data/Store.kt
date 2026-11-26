@@ -322,6 +322,13 @@ class Store(ctx: Context) {
             sp.edit().putBoolean("lineNo", v).apply()
         }
 
+    /** メモを開いたとき、タップするまでカーソルとキーボードを出さないか */
+    var tapToShowCursor: Boolean
+        get() = sp.getBoolean("tapCursor", true)
+        set(v) {
+            sp.edit().putBoolean("tapCursor", v).apply()
+        }
+
     // ---- 自分で名前を付けた（固定した）ファイル ----
     fun manualSet(): Set<String> = synchronized(lock) { sp.getStringSet("manualNames", emptySet()) ?: emptySet() }
 

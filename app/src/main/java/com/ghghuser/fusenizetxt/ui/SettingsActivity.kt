@@ -284,6 +284,16 @@ class SettingsActivity : ComponentActivity() {
                     store.listBgAlpha = 200
                 }) { Text("テーマ既定に戻す") }
                 HorizontalDivider()
+                Text("編集画面", style = MaterialTheme.typography.titleMedium)
+                var tapCur by remember { mutableStateOf(store.tapToShowCursor) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("開いたとき、タップするまでカーソルとキーボードを出さない", Modifier.weight(1f))
+                    Switch(checked = tapCur, onCheckedChange = {
+                        tapCur = it
+                        store.tapToShowCursor = it
+                    })
+                }
+                HorizontalDivider()
                 Text("画面の明るさ", style = MaterialTheme.typography.titleMedium)
                 var brOn by remember { mutableStateOf(store.brightnessLock) }
                 var brLv by remember { mutableIntStateOf(store.brightnessLevel) }

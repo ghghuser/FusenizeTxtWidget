@@ -214,8 +214,8 @@ class EditActivity : ComponentActivity() {
         isNewMemo = intent.getBooleanExtra(EXTRA_NEW, false)
         // タスク一覧（最近使ったアプリ）のサムネイルにメモの内容が写らないようにする
         if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
-        wantKb = intent.getBooleanExtra(EXTRA_KB, true)
-        if (intent.hasExtra(EXTRA_KB)) {
+        wantKb = intent.getBooleanExtra(EXTRA_KB, !store.tapToShowCursor)
+        if (intent.hasExtra(EXTRA_KB) || store.tapToShowCursor) {
             // スワイプ移動時: キーボードは開閉状態を引き継ぐ（閉じていたら一瞬出ないように、開いていたら早めに出す）
             window.setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
@@ -804,6 +804,16 @@ class EditActivity : ComponentActivity() {
                     focus.requestFocus()
                 } catch (e: Exception) {
                 }
+            } else if (loaded) {
+                // カーソルを出さずに開く場合も、末尾（カーソル位置）が見える位置にそろえる
+                delay(150)
+                try {
+                    focus.requestFocus()
+                    delay(80)
+                    kb?.hide()
+                    fm.clearFocus()
+                } catch (e: Exception) {
+                }
             }
         }
         // 下書きの自動退避（保存前にプロセスが落ちても復元できるように）
@@ -837,7 +847,7 @@ class EditActivity : ComponentActivity() {
             if (showSettings) {
                 fm.clearFocus()
                 kb?.hide()
-            } else if (loaded) {
+            } else if (loaded && wantKb) {
                 delay(100)
                 try {
                     focus.requestFocus()
@@ -1048,16 +1058,32 @@ class EditActivity : ComponentActivity() {
                                     cursorBrush = SolidColor(editorFg),
                                     modifier = m.focusRequester(focus).pointerInput(Unit) {
                                         // チェックボックス(☐/☑)をタップしたら、チェックとオフを切り替える
+                                        // ダブルタップでカーソルとキーボードを消す（スクロールは可能、タップで復活）
+                                        var lastUp = 0L
+                                        var lastPos = androidx.compose.ui.geometry.Offset.Zero
                                         while (true) {
+                                            var tapPos = androidx.compose.ui.geometry.Offset.Zero
                                             val tapped = awaitPointerEventScope {
                                                 val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                                                 val up = waitForUpOrCancellation(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                                tapPos = down.position
                                                 up != null && (up.position - down.position).getDistance() < viewConfiguration.touchSlop &&
                                                     up.uptimeMillis - down.uptimeMillis < 300
                                             }
                                             if (tapped) {
-                                                delay(60) // 文字入力欄がカーソルを動かすのを待つ
-                                                tapToggleCheckbox()
+                                                val now = System.currentTimeMillis()
+                                                if (now - lastUp < 350 && (tapPos - lastPos).getDistance() < 60f) {
+                                                    lastUp = 0L
+                                                    delay(60)
+                                                    text = text.copy(selection = TextRange(text.selection.end))
+                                                    kb?.hide()
+                                                    fm.clearFocus()
+                                                } else {
+                                                    lastUp = now
+                                                    lastPos = tapPos
+                                                    delay(60) // 文字入力欄がカーソルを動かすのを待つ
+                                                    tapToggleCheckbox()
+                                                }
                                             }
                                         }
                                     },

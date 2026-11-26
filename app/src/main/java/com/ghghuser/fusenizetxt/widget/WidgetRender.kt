@@ -191,7 +191,7 @@ object WidgetRender {
             rv.setViewVisibility(R.id.w_title, View.VISIBLE)
             rv.setTextViewText(R.id.w_title, ts)
             rv.setTextViewTextSize(R.id.w_title, TypedValue.COMPLEX_UNIT_SP, s.titleSizeSp.toFloat())
-            rv.setTextColor(R.id.w_title, rgbToArgb(fgRgb))
+            rv.setTextColor(R.id.w_title, (rgbToArgb(fgRgb) and 0xFFFFFF) or (0xD9 shl 24)) // 約85%の濃さ
             rv.setInt(R.id.w_title, "setGravity", when (s.hAlign) { 1 -> android.view.Gravity.CENTER_HORIZONTAL; 2 -> android.view.Gravity.END; else -> android.view.Gravity.START })
         } else {
             rv.setViewVisibility(R.id.w_title, View.GONE)

@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -80,15 +83,23 @@ fun StylePanel(
         }
         HorizontalDivider()
         Text("水平配置", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("左", "中央", "右").forEachIndexed { i, l ->
-                FilterChip(selected = style.hAlign == i, onClick = { onChange(style.copy(hAlign = i)) }, label = { Text(l) })
+        val hl = listOf("左", "中央", "右")
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            hl.forEachIndexed { i, l ->
+                SegmentedButton(
+                    selected = style.hAlign == i, onClick = { onChange(style.copy(hAlign = i)) },
+                    shape = SegmentedButtonDefaults.itemShape(i, hl.size),
+                ) { Text(l) }
             }
         }
         Text("垂直配置", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("上", "中央", "下").forEachIndexed { i, l ->
-                FilterChip(selected = style.vAlign == i, onClick = { onChange(style.copy(vAlign = i)) }, label = { Text(l) })
+        val vl = listOf("上", "中央", "下")
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            vl.forEachIndexed { i, l ->
+                SegmentedButton(
+                    selected = style.vAlign == i, onClick = { onChange(style.copy(vAlign = i)) },
+                    shape = SegmentedButtonDefaults.itemShape(i, vl.size),
+                ) { Text(l) }
             }
         }
         HorizontalDivider()

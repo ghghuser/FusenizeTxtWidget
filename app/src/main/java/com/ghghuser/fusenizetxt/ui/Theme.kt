@@ -23,7 +23,14 @@ fun FusenTheme(content: @Composable () -> Unit) {
         dark -> darkColorScheme()
         else -> lightColorScheme()
     }
-    MaterialTheme(colorScheme = scheme, content = content)
+    // ダークテーマの黒を、ほんの少しマイルドな色にする（メニューやダイアログも含む）
+    val soft = if (dark) scheme.copy(
+        background = Color(0xFF1C2025), surface = Color(0xFF1C2025),
+        surfaceContainerLowest = Color(0xFF181B20), surfaceContainerLow = Color(0xFF20242A),
+        surfaceContainer = Color(0xFF252A31), surfaceContainerHigh = Color(0xFF2B3037),
+        surfaceContainerHighest = Color(0xFF31363E), surfaceVariant = Color(0xFF2B3037),
+    ) else scheme
+    MaterialTheme(colorScheme = soft, content = content)
 }
 
 /** 指定した背景色に連動する配色（暗い背景→明るい文字、明るい背景→濃い文字。チップや枠線の色も背景に合わせる） */
@@ -36,6 +43,9 @@ fun tintedScheme(bg: Color): ColorScheme {
         primary = if (dark) Color(0xFF9FC2FF) else Color(0xFF0B4DB0),
         onPrimary = if (dark) Color(0xFF10131A) else Color.White,
         secondaryContainer = lerp(bg, fg, 0.22f), onSecondaryContainer = fg,
+        surfaceContainerLowest = lerp(bg, fg, 0.03f), surfaceContainerLow = lerp(bg, fg, 0.05f),
+        surfaceContainer = lerp(bg, fg, 0.08f), surfaceContainerHigh = lerp(bg, fg, 0.11f),
+        surfaceContainerHighest = lerp(bg, fg, 0.14f),
         outline = fg.copy(alpha = 0.55f), outlineVariant = fg.copy(alpha = 0.28f),
     )
 }
