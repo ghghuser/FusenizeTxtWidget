@@ -864,10 +864,9 @@ class EditActivity : ComponentActivity() {
         Box(
             Modifier.fillMaxSize()
                 .background(
-                    // アプリ内の編集は一覧の背景色・透明度を引き継ぐ（未指定でも一覧と同じ既定色）。ウィジェットの編集は従来どおり
-                    if (!widgetMode && store.listBgColor != null) Color(rgbToArgb(store.listBgColor!!)).copy(alpha = store.listBgAlpha / 255f)
-                    else if (!widgetMode) cs.background.copy(alpha = store.listBgAlpha / 255f) // 一覧の既定背景と同じ
-                    else Color.Black.copy(alpha = 0.34f)
+                    // 枠外の透明な背景: 入力欄の背景色と同じ色合いで暗めにした色（透明度は従来どおり。アプリ=一覧の透過度、ウィジェット=0.34）
+                    androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.5f)
+                        .copy(alpha = if (widgetMode) 0.34f else store.listBgAlpha / 255f)
                 )
                 .systemBarsPadding()
                 .imePadding()
@@ -969,13 +968,15 @@ class EditActivity : ComponentActivity() {
                                         finish()
                                     })
                                 }
+                                if (widgetMode) {
+                                    CompactMenuItem(text = { Text("📋 アプリの一覧を開く") }, onClick = {
+                                        menuOpen = false
+                                        closeAndSave()
+                                        startActivity(Intent(this@EditActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                    })
+                                }
                                 if (manualName) {
-                                    CompactMenuItem(text = { Text("📋 一覧を開く") }, onClick = {
-                                    menuOpen = false
-                                    closeAndSave()
-                                    startActivity(Intent(this@EditActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                })
-                                CompactMenuItem(text = { Text("ファイル名を自動に戻す") }, onClick = {
+                                    CompactMenuItem(text = { Text("ファイル名を自動に戻す") }, onClick = {
                                         menuOpen = false
                                         dlg = Dlg.AUTONAME
                                     })

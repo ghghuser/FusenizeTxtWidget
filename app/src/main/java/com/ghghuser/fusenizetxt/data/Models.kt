@@ -41,7 +41,8 @@ data class WidgetStyle(
     val scroll: Boolean = true, // 長文はウィジェット内でスクロールできるようにする
     val showTitle: Boolean = false, // ウィジェット上部にタイトル（ファイル名）を表示
     val titleSizeSp: Int = 12,
-    val tabHeightDp: Int = 20, // ページ切替バーの高さ
+    val tabHeightDp: Int = 22, // ページ切替バーの高さ
+    val tabLabel: Int = 0, // タブの表示: 0=数字 1=タイトル 2=なし
     val paper: Boolean = true, // 紙の質感（薄いグラデーション＋ノイズ）
     val hAlign: Int = 0, // 0=左 1=中央 2=右
     val vAlign: Int = 0, // 0=上 1=中央 2=下
@@ -55,7 +56,7 @@ data class WidgetStyle(
 
     fun toJson(): JSONObject = JSONObject()
         .put("bg", bgColor).put("bgA", bgAlpha).put("auto", autoText).put("fg", textColor)
-        .put("size", textSizeSp).put("esize", editSizeSp).put("paper", paper).put("pstr", paperStrength).put("scroll", scroll).put("title", showTitle).put("tsize", titleSizeSp).put("tabh", tabHeightDp).put("h", hAlign).put("v", vAlign)
+        .put("size", textSizeSp).put("esize", editSizeSp).put("paper", paper).put("pstr", paperStrength).put("scroll", scroll).put("title", showTitle).put("tsize", titleSizeSp).put("tabh", tabHeightDp).put("tlab", tabLabel).put("h", hAlign).put("v", vAlign)
         .put("bold", bold).put("italic", italic)
         .put("outer", outer.toJson()).put("inner", inner.toJson())
 
@@ -76,6 +77,7 @@ data class WidgetStyle(
                 showTitle = o.optBoolean("title", d.showTitle),
                 titleSizeSp = o.optInt("tsize", d.titleSizeSp).coerceIn(8, 32),
                 tabHeightDp = o.optInt("tabh", d.tabHeightDp).coerceIn(14, 48),
+                tabLabel = o.optInt("tlab", d.tabLabel).coerceIn(0, 2),
                 hAlign = o.optInt("h", d.hAlign).coerceIn(0, 2),
                 vAlign = o.optInt("v", d.vAlign).coerceIn(0, 2),
                 bold = o.optBoolean("bold", d.bold),

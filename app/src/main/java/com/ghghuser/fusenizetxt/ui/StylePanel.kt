@@ -54,6 +54,16 @@ fun StylePanel(
         }
         if (pageCount > 1) {
             SliderRow("ページ数タブの太さ (dp)", style.tabHeightDp, 14, 48) { onChange(style.copy(tabHeightDp = it)) }
+            Text("タブの表示", style = MaterialTheme.typography.labelLarge)
+            val tl = listOf("数字", "タイトル", "なし")
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                tl.forEachIndexed { i, l ->
+                    SegmentedButton(
+                        selected = style.tabLabel == i, onClick = { onChange(style.copy(tabLabel = i)) },
+                        shape = SegmentedButtonDefaults.itemShape(i, tl.size),
+                    ) { Text(l) }
+                }
+            }
         }
         HorizontalDivider()
         ColorPickerRow(

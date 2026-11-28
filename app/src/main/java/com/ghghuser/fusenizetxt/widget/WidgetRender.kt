@@ -39,6 +39,14 @@ object WidgetRender {
     const val EXTRA_ID = "w_id"
     const val EXTRA_TO = "w_to"
 
+    /** タブに出すタイトル（そのページのメモのファイル名）。未設定のページは「−」 */
+    private fun tabTitle(ctx: Context, cfg: WidgetConfig, i: Int): String {
+        val pg = cfg.pages[i]
+        val uri = pg.fileUri ?: return "−"
+        val nm = runCatching { MemoRepo.displayName(ctx, Uri.parse(uri)) }.getOrNull() ?: return "−"
+        return MemoRepo.shownTitle(nm, pg.manualName || Store(ctx).isManual(uri)).ifBlank { "−" }
+    }
+
     private val TAB_IDS = intArrayOf(R.id.w_tab0, R.id.w_tab1, R.id.w_tab2, R.id.w_tab3, R.id.w_tab4)
     private val TABT_IDS = intArrayOf(R.id.w_tabt0, R.id.w_tabt1, R.id.w_tabt2, R.id.w_tabt3, R.id.w_tabt4)
     private val TABB_IDS = intArrayOf(R.id.w_tabb0, R.id.w_tabb1, R.id.w_tabb2, R.id.w_tabb3, R.id.w_tabb4)
@@ -239,8 +247,14 @@ object WidgetRender {
             val tabStyle = cfg.styleFor(i)
             val padPx = px(((s.tabHeightDp - 15) / 2).coerceAtLeast(0))
             rv.setViewPadding(TABT_IDS[i], 0, padPx, 0, padPx)
-            val label = SpannableString("${i + 1}")
-            if (on) label.setSpan(StyleSpan(Typeface.BOLD), 0, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val label = SpannableString(
+                when (s.tabLabel) {
+                    1 -> tabTitle(ctx, cfg, i)
+                    2 -> ""
+                    else -> "${i + 1}"
+                },
+            )
+            if (on && label.isNotEmpty()) label.setSpan(StyleSpan(Typeface.BOLD), 0, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             rv.setViewVisibility(tab, View.VISIBLE)
             rv.setTextViewText(TABT_IDS[i], label)
             // タブの背景は、対応するページのウィジェット背景（色・透過度）と同じ。選択中は太字で示す
