@@ -24,7 +24,7 @@ object Importer {
         val pairs: List<Pair<Item, MemoRepo.Entry>> = emptyList(),
     ) {
         fun describe(verb: String): String {
-            val sb = StringBuilder("${done}件を${verb}しました")
+            val sb = StringBuilder("${done}件を${verb}")
             if (overwritten > 0) sb.append("（うち上書き${overwritten}件）")
             if (failed > 0) sb.append("、失敗${failed}件")
             if (cancelled) sb.append("（途中で中止）")

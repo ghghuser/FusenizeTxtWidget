@@ -81,7 +81,7 @@ class SettingsActivity : ComponentActivity() {
         val ctx = applicationContext
         val items = withContext(Dispatchers.IO) { uris.mapNotNull { Importer.readItem(ctx, it) } }
         if (items.isEmpty()) {
-            toast("取り込めるtxtがありませんでした")
+            toast("取り込めるtxtなし")
             return
         }
         val r = Importer.run(ctx, items, false) { n, rem -> importer.askConflict(n, rem) }
@@ -98,7 +98,7 @@ class SettingsActivity : ComponentActivity() {
             }
         }
         if (content == null || content.items.isEmpty()) {
-            toast("zipからtxtを取り込めませんでした")
+            toast("zipからの取り込みに失敗")
             return
         }
         val r = Importer.run(ctx, content.items, false) { n, rem -> importer.askConflict(n, rem) }
@@ -118,7 +118,7 @@ class SettingsActivity : ComponentActivity() {
                 -1
             }
         }
-        toast(if (n >= 0) "${n}件のメモをzipに書き出しました" else "zipの書き出しに失敗しました")
+        toast(if (n >= 0) "${n}件のメモをzipに書き出し" else "zipの書き出しに失敗")
     }
 
     override fun onResume() {
@@ -166,7 +166,7 @@ class SettingsActivity : ComponentActivity() {
                             if (r != null) toast(r.describe("移動"))
                         }
                     } else {
-                        toast("フォルダの権限を保持できませんでした")
+                        toast("フォルダの権限を保持できず")
                     }
                 }
             }
@@ -190,7 +190,7 @@ class SettingsActivity : ComponentActivity() {
                     store.backupTree = uri.toString()
                     bkDest = Backup.destLabel(this)
                 } catch (e: Exception) {
-                    toast("フォルダの権限を保持できませんでした")
+                    toast("フォルダの権限を保持できず")
                 }
             }
         }
@@ -221,18 +221,18 @@ class SettingsActivity : ComponentActivity() {
                     OutlinedButton(onClick = {
                         val c = Store.sanitizeFolder(folderInput)
                         if (c == null) {
-                            toast("使えない名前です")
+                            toast("使えない名前")
                         } else {
                             store.folderName = c
                             folderInput = c
                             MemoRepo.resetCache()
                             storage = MemoRepo.storageLabel(this@SettingsActivity)
-                            toast("保存フォルダ名を「$c」にしました")
+                            toast("保存フォルダ名を「$c」に変更")
                         }
                     }) { Text("適用") }
                 }
                 Text(
-                    "選んだフォルダの名前がこれと同じならそのフォルダを、違えばその中にこの名前のフォルダを作って保存先にします。名前を変えても、以前のフォルダのメモは移動しません。",
+                    "選んだフォルダ名が同じ名前ならそのフォルダ、異なればその中に同名のフォルダを作成して保存先に設定。名前を変えても、以前のフォルダのメモは移動しない。",
                     style = MaterialTheme.typography.labelSmall,
                 )
                 Button(onClick = { treePicker.launch(null) }, modifier = Modifier.fillMaxWidth()) {
@@ -284,6 +284,16 @@ class SettingsActivity : ComponentActivity() {
                     store.listBgAlpha = 200
                 }) { Text("テーマ既定に戻す") }
                 HorizontalDivider()
+                Text("編集画面", style = MaterialTheme.typography.titleMedium)
+                var tapCur by remember { mutableStateOf(store.tapToShowCursor) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("開いたとき、タップするまでカーソルとキーボードを出さない", Modifier.weight(1f))
+                    Switch(checked = tapCur, onCheckedChange = {
+                        tapCur = it
+                        store.tapToShowCursor = it
+                    })
+                }
+                HorizontalDivider()
                 Text("画面の明るさ", style = MaterialTheme.typography.titleMedium)
                 var brOn by remember { mutableStateOf(store.brightnessLock) }
                 var brLv by remember { mutableIntStateOf(store.brightnessLevel) }
@@ -301,7 +311,7 @@ class SettingsActivity : ComponentActivity() {
                         store.brightnessLevel = it
                         com.ghghuser.fusenizetxt.data.Brightness.apply(this@SettingsActivity)
                     }
-                    Text("このアプリを開いている間だけ有効です（端末全体の設定は変えません）。", style = MaterialTheme.typography.labelSmall)
+                    Text("アプリを開いている間のみ有効（端末全体の設定は変更なし）。", style = MaterialTheme.typography.labelSmall)
                 }
                 HorizontalDivider()
                 Text("zipバックアップ", style = MaterialTheme.typography.titleMedium)
@@ -318,7 +328,7 @@ class SettingsActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("zipからインポート（復元）") }
                 Text(
-                    "インポート時にファイル名は変更しません。同名があれば上書きか連番を選べます。",
+                    "インポート時のファイル名は変更なし。同名の場合は上書きか連番を選択可能。",
                     style = MaterialTheme.typography.labelSmall,
                 )
                 HorizontalDivider()
@@ -358,7 +368,7 @@ class SettingsActivity : ComponentActivity() {
                         }
                     }
                     Text(
-                        "内容が前回から変わっていないときは作りません。端末の省電力設定により、実行時刻は前後することがあります。",
+                        "内容が前回から変わっていない場合は作成なし。端末の省電力設定により、実行時刻は前後する場合あり。",
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
@@ -380,7 +390,7 @@ class SettingsActivity : ComponentActivity() {
                 }
                 HorizontalDivider()
 
-                Text("バージョン ${versionName()}", style = MaterialTheme.typography.labelSmall)
+                Text("FusenizeTxt v${versionName()}", style = MaterialTheme.typography.labelSmall)
                 var showLicense by remember { mutableStateOf(false) }
                 TextButton(onClick = { showLicense = true }) { Text("ライセンス（商用利用・再配布禁止）") }
                 if (showLicense) {
@@ -388,7 +398,7 @@ class SettingsActivity : ComponentActivity() {
                         try {
                             resources.openRawResource(com.ghghuser.fusenizetxt.R.raw.license).bufferedReader().use { it.readText() }
                         } catch (_: Exception) {
-                            "ライセンス文を読み込めませんでした。"
+                            "ライセンス文の読み込みに失敗"
                         }
                     }
                     AlertDialog(
@@ -405,7 +415,7 @@ class SettingsActivity : ComponentActivity() {
             AlertDialog(
                 onDismissRequest = { moveAsk = null; d.complete(false) },
                 title = { Text("元の保存先のメモも移動しますか？") },
-                text = { Text("これまでの保存先にある ${moveCount} 件のtxtを、新しい保存先へ移動します（元の場所からは削除され、ウィジェットや履歴などの紐付けは引き継がれます）。「移動しない」を選ぶと、元のファイルはそのまま残ります。") },
+                text = { Text("これまでの保存先にある ${moveCount} 件のtxtを新しい保存先へ移動（元の場所からは削除。ウィジェットや履歴などの紐付けは引き継ぎ）。「移動しない」を選ぶと、元のファイルはそのまま残る。") },
                 confirmButton = { TextButton(onClick = { moveAsk = null; d.complete(true) }) { Text("移動する") } },
                 dismissButton = { TextButton(onClick = { moveAsk = null; d.complete(false) }) { Text("移動しない") } },
             )

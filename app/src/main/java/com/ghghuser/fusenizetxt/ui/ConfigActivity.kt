@@ -112,7 +112,7 @@ class ConfigActivity : ComponentActivity() {
 
     private fun finishWith(name: String?, uri: Uri?) {
         if (uri == null) {
-            errorText = "メモを用意できませんでした（保存先に作成できませんでした）"
+            errorText = "メモの用意に失敗（保存先に作成できず）"
             busy = false
             return
         }
@@ -120,7 +120,7 @@ class ConfigActivity : ComponentActivity() {
             // 読み込める状態か確認してから紐付ける（読めないメモを紐付けて「読み込めません」になるのを防ぐ）
             val err = withContext(Dispatchers.IO) { MemoRepo.verifyReadable(applicationContext, uri) }
             if (err != null) {
-                errorText = "作成したメモを開けませんでした\n$err"
+                errorText = "作成したメモを開けず\n$err"
                 busy = false
                 return@launch
             }
@@ -163,7 +163,7 @@ class ConfigActivity : ComponentActivity() {
                         tick++
                     }
                 } else {
-                    toast("フォルダの権限を保持できませんでした")
+                    toast("フォルダの権限を保持できず")
                 }
             }
         }
@@ -175,7 +175,7 @@ class ConfigActivity : ComponentActivity() {
                     val ctx = applicationContext
                     val item = withContext(Dispatchers.IO) { Importer.readItem(ctx, uri) }
                     if (item == null) {
-                        toast("ファイルを読み込めませんでした")
+                        toast("ファイルの読み込みに失敗")
                         busy = false
                         return@launch
                     }
@@ -183,7 +183,7 @@ class ConfigActivity : ComponentActivity() {
                     val e = r.entries.firstOrNull()
                     if (e != null) finishWith(e.name, e.uri)
                     else {
-                        toast(if (r.cancelled) "取り込みを中止しました" else "取り込めませんでした")
+                        toast(if (r.cancelled) "取り込みを中止" else "取り込みに失敗")
                         busy = false
                     }
                 }
@@ -242,7 +242,7 @@ class ConfigActivity : ComponentActivity() {
                         if (list == null) {
                             Text("読み込み中…")
                         } else if (list.isEmpty()) {
-                            Text("保存先にtxtがありません")
+                            Text("保存先にtxtなし")
                         } else {
                             LazyColumn(Modifier.fillMaxWidth().height(320.dp)) {
                                 items(list, key = { it.uri.toString() }) { e ->

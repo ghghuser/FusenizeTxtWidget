@@ -71,23 +71,23 @@ object Backup {
             val count = tmp.outputStream().use { ZipTools.export(ctx, it, digest) }
             val sig = digest.digest().joinToString("") { "%02x".format(it) }
             when {
-                count == 0 -> Outcome(true, "バックアップするメモがありません")
-                !force && sig == store.backupSig -> Outcome(true, "前回から変更がないためスキップしました")
+                count == 0 -> Outcome(true, "バックアップ対象のメモなし")
+                !force && sig == store.backupSig -> Outcome(true, "前回から変更がないためスキップ")
                 else -> {
                     val name = PREFIX + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".zip"
                     val usedTree = usableTree(ctx)
                     if (!write(ctx, name, tmp, usedTree)) {
-                        Outcome(false, "バックアップ先に書き込めませんでした")
+                        Outcome(false, "バックアップ先への書き込みに失敗")
                     } else {
                         store.backupSig = sig
                         prune(ctx, store.backupKeep, usedTree)
                         val note = if (store.backupTree != null && usedTree == null) "（指定フォルダが使えないため既定の場所に保存）" else ""
-                        Outcome(true, "${count}件をバックアップしました$note")
+                        Outcome(true, "${count}件をバックアップ$note")
                     }
                 }
             }
         } catch (e: Exception) {
-            Outcome(false, "バックアップに失敗しました")
+            Outcome(false, "バックアップに失敗")
         } finally {
             tmp.delete()
         }

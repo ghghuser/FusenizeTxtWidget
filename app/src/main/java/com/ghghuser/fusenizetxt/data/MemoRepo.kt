@@ -408,12 +408,12 @@ object MemoRepo {
     fun readText(ctx: Context, uri: Uri): Result<FileText> {
         return try {
             val bytes = openIn(ctx, uri).use { it.readBytes() }
-            if (bytes.size > MAX_BYTES) return Result.failure(ReadError("ファイルが大きすぎます（2MBまで）"))
+            if (bytes.size > MAX_BYTES) return Result.failure(ReadError("ファイルが大きすぎる（上限2MB）"))
             val meta = Store(ctx).meta(uri.toString())
             val decoded = tryDecode(bytes, meta.charset) ?: return Result.failure(EncodingException(bytes))
             Result.success(FileText(decoded, meta.crlf || hasCrlf(bytes, meta.charset)))
         } catch (e: Exception) {
-            Result.failure(ReadError("読み込めません（${describe(e)}）"))
+            Result.failure(ReadError("読み込みに失敗（${describe(e)}）"))
         }
     }
 
@@ -453,7 +453,7 @@ object MemoRepo {
     fun verifyReadable(ctx: Context, uri: Uri): String? {
         val r = readText(ctx, uri)
         if (r.isSuccess || r.exceptionOrNull() is EncodingException) return null
-        return r.exceptionOrNull()?.message ?: "読み込めません"
+        return r.exceptionOrNull()?.message ?: "読み込みに失敗"
     }
 
     fun hasCrlf(bytes: ByteArray, charset: String): Boolean {
@@ -503,7 +503,7 @@ object MemoRepo {
                 notes.add("直接: " + describe(e))
             }
             val local = createLocal(ctx, name, bytes)
-            Store(ctx).storageNote = notes.joinToString(" / ") + (if (local != null) " → アプリ内に作成（ファイルアプリには出ません）" else "")
+            Store(ctx).storageNote = notes.joinToString(" / ") + (if (local != null) " → アプリ内に作成（ファイルアプリには非表示）" else "")
             return local
         } catch (e: Exception) {
             return null

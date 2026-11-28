@@ -214,8 +214,8 @@ class EditActivity : ComponentActivity() {
         isNewMemo = intent.getBooleanExtra(EXTRA_NEW, false)
         // タスク一覧（最近使ったアプリ）のサムネイルにメモの内容が写らないようにする
         if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
-        wantKb = intent.getBooleanExtra(EXTRA_KB, true)
-        if (intent.hasExtra(EXTRA_KB)) {
+        wantKb = intent.getBooleanExtra(EXTRA_KB, !store.tapToShowCursor)
+        if (intent.hasExtra(EXTRA_KB) || store.tapToShowCursor) {
             // スワイプ移動時: キーボードは開閉状態を引き継ぐ（閉じていたら一瞬出ないように、開いていたら早めに出す）
             window.setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
@@ -276,7 +276,7 @@ class EditActivity : ComponentActivity() {
                     pendingEnc = ex.bytes
                     return@launch
                 }
-                val msg = result.exceptionOrNull()?.message ?: "開けませんでした"
+                val msg = result.exceptionOrNull()?.message ?: "開くことに失敗"
                 Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
                 if (widgetMode && !MemoRepo.exists(ctx, u)) {
                     startActivity(
@@ -304,7 +304,7 @@ class EditActivity : ComponentActivity() {
             var shown = content
             if (draft != null && draft.text != content && draft.time > mod) {
                 shown = draft.text
-                Toast.makeText(ctx, "保存されていなかった内容を復元しました", Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, "未保存だった内容を復元", Toast.LENGTH_LONG).show()
             }
             text = TextFieldValue(shown, TextRange(shown.length))
             store.addRecent(u.toString())
@@ -313,7 +313,7 @@ class EditActivity : ComponentActivity() {
     }
 
     private val notifPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) Toast.makeText(this, "通知が許可されていないため、リマインダーは表示されません（端末の設定で許可できます）", Toast.LENGTH_LONG).show()
+        if (!granted) Toast.makeText(this, "通知が未許可のため、リマインダーは表示されない（端末の設定で許可可能）", Toast.LENGTH_LONG).show()
     }
 
     /** 左右スワイプ: delta=-1 で一覧の上のメモ、+1 で下のメモ */
@@ -325,7 +325,7 @@ class EditActivity : ComponentActivity() {
         }
         val ni = navIdx + delta
         if (ni !in nav.indices) {
-            Toast.makeText(this, if (delta < 0) "一覧の先頭です" else "一覧の末尾です", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (delta < 0) "一覧の先頭" else "一覧の末尾", Toast.LENGTH_SHORT).show()
             return
         }
         switching = true
@@ -358,7 +358,7 @@ class EditActivity : ComponentActivity() {
         val cfg = store.getConfig(widgetId)
         val to = page + delta
         if (to !in cfg.pages.indices) {
-            Toast.makeText(this, if (delta < 0) "最初のタブです" else "最後のタブです", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (delta < 0) "最初のタブ" else "最後のタブ", Toast.LENGTH_SHORT).show()
             return
         }
         switching = true
@@ -398,7 +398,7 @@ class EditActivity : ComponentActivity() {
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         com.ghghuser.fusenizetxt.data.Reminders.set(applicationContext, u.toString(), com.ghghuser.fusenizetxt.data.Reminder(at, repeat))
-        Toast.makeText(this, "リマインダーを設定しました", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "リマインダーを設定", Toast.LENGTH_SHORT).show()
         if (android.os.Build.VERSION.SDK_INT >= 31) {
             val am = getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
             if (!am.canScheduleExactAlarms()) exactWarn = true
@@ -408,7 +408,7 @@ class EditActivity : ComponentActivity() {
     private fun clearReminder() {
         val u = uriRef.get() ?: return
         com.ghghuser.fusenizetxt.data.Reminders.clear(applicationContext, u.toString())
-        Toast.makeText(this, "リマインダーを解除しました", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "リマインダーを解除", Toast.LENGTH_SHORT).show()
     }
 
     override fun onStart() {
@@ -456,8 +456,8 @@ class EditActivity : ComponentActivity() {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             ctx,
-                            if (outcome.encodeError) "この文字コードで表せない文字があるため保存できません（メニューの「UTF-8に変換して保存」を使ってください。内容は端末内に退避済み）"
-                            else "保存に失敗しました（内容は端末内に退避済み）",
+                            if (outcome.encodeError) "この文字コードで表せない文字があり保存不可（メニューの「UTF-8に変換して保存」を利用。内容は端末内に退避済み）"
+                            else "保存に失敗（内容は端末内に退避済み）",
                             Toast.LENGTH_LONG,
                         ).show()
                     }
@@ -514,7 +514,7 @@ class EditActivity : ComponentActivity() {
                 }
             }
             if (uri == null) {
-                Toast.makeText(this@EditActivity, "共有用のファイルを作れませんでした", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@EditActivity, "共有用ファイルの作成に失敗", Toast.LENGTH_SHORT).show()
                 return@launch
             }
             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -535,7 +535,7 @@ class EditActivity : ComponentActivity() {
                 val r = MemoRepo.renameTo(ctx, u, base)
                 if (r == null) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(ctx, "ファイル名を変更できませんでした", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, "ファイル名の変更に失敗", Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     Drafts.delete(ctx, u)
@@ -569,7 +569,7 @@ class EditActivity : ComponentActivity() {
                 val u = uriRef.get() ?: return@withLock
                 val r = MemoRepo.autoRename(ctx, u, t)
                 if (r == null) {
-                    withContext(Dispatchers.Main) { Toast.makeText(ctx, "ファイル名を変更できませんでした", Toast.LENGTH_SHORT).show() }
+                    withContext(Dispatchers.Main) { Toast.makeText(ctx, "ファイル名の変更に失敗", Toast.LENGTH_SHORT).show() }
                     return@withLock
                 }
                 uriRef.set(r.uri)
@@ -581,7 +581,7 @@ class EditActivity : ComponentActivity() {
                 withContext(Dispatchers.Main) {
                     fileName = r.name
                     manualName = false
-                    Toast.makeText(ctx, "ファイル名を「" + r.name.removeSuffix(".txt") + "」にしました（以降、先頭行から自動で付きます）", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, "ファイル名を「" + r.name.removeSuffix(".txt") + "」に変更（以降は先頭行から自動で付与）", Toast.LENGTH_LONG).show()
                 }
                 try {
                     FusenApp.refreshWidgets(ctx)
@@ -606,7 +606,7 @@ class EditActivity : ComponentActivity() {
                     } else {
                         deleted = false
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(ctx, "削除できませんでした", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, "削除に失敗", Toast.LENGTH_SHORT).show()
                         }
                         return@withLock
                     }
@@ -710,7 +710,7 @@ class EditActivity : ComponentActivity() {
                 History.add(ctx, u, cur, force = true) // 戻す前の内容も履歴に残す
                 History.read(item.v)
             }
-            if (t == null) Toast.makeText(ctx, "この版を読み込めませんでした", Toast.LENGTH_SHORT).show()
+            if (t == null) Toast.makeText(ctx, "この版の読み込みに失敗", Toast.LENGTH_SHORT).show()
             else applyText(TextFieldValue(t, TextRange(t.length)))
         }
     }
@@ -740,7 +740,7 @@ class EditActivity : ComponentActivity() {
                 pendingEnc = null
                 loadContent()
             } else {
-                Toast.makeText(ctx, "UTF-8への変換に失敗しました", Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, "UTF-8への変換に失敗", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -760,9 +760,9 @@ class EditActivity : ComponentActivity() {
                 charsetName = "UTF-8"
                 lastSaved = t
                 Drafts.delete(ctx, u)
-                Toast.makeText(ctx, "UTF-8に変換しました（元のファイルは端末内にバックアップ済み）", Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, "UTF-8に変換（元のファイルは端末内にバックアップ済み）", Toast.LENGTH_LONG).show()
             } else {
-                Toast.makeText(ctx, "UTF-8への変換に失敗しました", Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, "UTF-8への変換に失敗", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -804,6 +804,16 @@ class EditActivity : ComponentActivity() {
                     focus.requestFocus()
                 } catch (e: Exception) {
                 }
+            } else if (loaded) {
+                // カーソルを出さずに開く場合も、末尾（カーソル位置）が見える位置にそろえる
+                delay(150)
+                try {
+                    focus.requestFocus()
+                    delay(80)
+                    kb?.hide()
+                    fm.clearFocus()
+                } catch (e: Exception) {
+                }
             }
         }
         // 下書きの自動退避（保存前にプロセスが落ちても復元できるように）
@@ -837,7 +847,7 @@ class EditActivity : ComponentActivity() {
             if (showSettings) {
                 fm.clearFocus()
                 kb?.hide()
-            } else if (loaded) {
+            } else if (loaded && wantKb) {
                 delay(100)
                 try {
                     focus.requestFocus()
@@ -854,9 +864,9 @@ class EditActivity : ComponentActivity() {
         Box(
             Modifier.fillMaxSize()
                 .background(
-                    // アプリ内の編集は一覧の背景色・透明度を引き継ぐ（未指定なら従来の暗め）。ウィジェットの編集は従来どおり
-                    if (!widgetMode && store.listBgColor != null) Color(rgbToArgb(store.listBgColor!!)).copy(alpha = store.listBgAlpha / 255f)
-                    else Color.Black.copy(alpha = 0.34f)
+                    // 枠外の透明な背景: 入力欄の背景色と同じ色合いで暗めにした色（透明度は従来どおり。アプリ=一覧の透過度、ウィジェット=0.34）
+                    androidx.compose.ui.graphics.lerp(editorBg, Color.Black, 0.5f)
+                        .copy(alpha = if (widgetMode) 0.34f else store.listBgAlpha / 255f)
                 )
                 .systemBarsPadding()
                 .imePadding()
@@ -919,7 +929,7 @@ class EditActivity : ComponentActivity() {
                             // 点灯したままの間は🔆を表示。タップで解除
                             IconButton(onClick = {
                                 applyKeepOn(false)
-                                Toast.makeText(this@EditActivity, "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@EditActivity, "画面の自動消灯を元に戻した", Toast.LENGTH_SHORT).show()
                             }, modifier = Modifier.size(34.dp)) { Text("🔆") }
                         }
                         Box {
@@ -928,7 +938,7 @@ class EditActivity : ComponentActivity() {
                                 CompactMenuItem(text = { Text((if (keepOn) "🌙 画面を自動消灯に戻す" else "🔆 画面を点灯したままにする")) }, onClick = {
                                     menuOpen = false
                                     applyKeepOn(!keepOn)
-                                    Toast.makeText(this@EditActivity, if (keepOn) "編集中は画面を消さないようにしました" else "画面の自動消灯を元に戻しました", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(this@EditActivity, if (keepOn) "編集中は画面を消さない設定" else "画面の自動消灯を元に戻した", Toast.LENGTH_SHORT).show()
                                 })
                                 CompactMenuItem(text = { Text("💡 画面の明るさを固定") }, onClick = {
                                     menuOpen = false
@@ -956,6 +966,13 @@ class EditActivity : ComponentActivity() {
                                                 .putExtra(EXTRA_PAGE, page)
                                         )
                                         finish()
+                                    })
+                                }
+                                if (widgetMode) {
+                                    CompactMenuItem(text = { Text("📋 アプリの一覧を開く") }, onClick = {
+                                        menuOpen = false
+                                        closeAndSave()
+                                        startActivity(Intent(this@EditActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                                     })
                                 }
                                 if (manualName) {
@@ -1048,16 +1065,32 @@ class EditActivity : ComponentActivity() {
                                     cursorBrush = SolidColor(editorFg),
                                     modifier = m.focusRequester(focus).pointerInput(Unit) {
                                         // チェックボックス(☐/☑)をタップしたら、チェックとオフを切り替える
+                                        // ダブルタップでカーソルとキーボードを消す（スクロールは可能、タップで復活）
+                                        var lastUp = 0L
+                                        var lastPos = androidx.compose.ui.geometry.Offset.Zero
                                         while (true) {
+                                            var tapPos = androidx.compose.ui.geometry.Offset.Zero
                                             val tapped = awaitPointerEventScope {
                                                 val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                                                 val up = waitForUpOrCancellation(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                                tapPos = down.position
                                                 up != null && (up.position - down.position).getDistance() < viewConfiguration.touchSlop &&
                                                     up.uptimeMillis - down.uptimeMillis < 300
                                             }
                                             if (tapped) {
-                                                delay(60) // 文字入力欄がカーソルを動かすのを待つ
-                                                tapToggleCheckbox()
+                                                val now = System.currentTimeMillis()
+                                                if (now - lastUp < 350 && (tapPos - lastPos).getDistance() < 60f) {
+                                                    lastUp = 0L
+                                                    delay(60)
+                                                    text = text.copy(selection = TextRange(text.selection.end))
+                                                    kb?.hide()
+                                                    fm.clearFocus()
+                                                } else {
+                                                    lastUp = now
+                                                    lastPos = tapPos
+                                                    delay(60) // 文字入力欄がカーソルを動かすのを待つ
+                                                    tapToggleCheckbox()
+                                                }
                                             }
                                         }
                                     },
@@ -1127,15 +1160,15 @@ class EditActivity : ComponentActivity() {
         if (exactWarn) {
             AlertDialog(
                 onDismissRequest = { exactWarn = false },
-                title = { Text("通知が数分ずれることがあります") },
-                text = { Text("この端末では「アラームとリマインダー」の許可がないため、通知が指定時刻から数分ずれることがあります。時刻どおりに通知したい場合は、設定で許可してください。") },
+                title = { Text("通知が数分ずれる場合あり") },
+                text = { Text("この端末は「アラームとリマインダー」が未許可のため、通知が指定時刻から数分ずれる場合あり。時刻どおりの通知には、設定での許可が必要。") },
                 confirmButton = {
                     TextButton(onClick = {
                         exactWarn = false
                         try {
                             startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).setData(android.net.Uri.parse("package:$packageName")))
                         } catch (e: Exception) {
-                            Toast.makeText(this@EditActivity, "設定画面を開けませんでした", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@EditActivity, "設定画面を開けない", Toast.LENGTH_SHORT).show()
                         }
                     }) { Text("設定を開く") }
                 },
@@ -1147,7 +1180,7 @@ class EditActivity : ComponentActivity() {
             AlertDialog(
                 onDismissRequest = { histPick = null },
                 title = { Text("この版に戻しますか？") },
-                text = { Text("${histFmt.format(Date(h.v.time))} の内容を読み込みます。今の内容も履歴に残り、「↺ 戻す」でも元に戻せます。") },
+                text = { Text("${histFmt.format(Date(h.v.time))} の内容を読み込み。今の内容も履歴に残り、「↺ 戻す」でも復帰可能。") },
                 confirmButton = {
                     TextButton(onClick = {
                         histPick = null
@@ -1178,7 +1211,7 @@ class EditActivity : ComponentActivity() {
                     if (list == null) {
                         Text("読み込み中…")
                     } else if (list.isEmpty()) {
-                        Text("履歴はまだありません")
+                        Text("履歴なし")
                     } else {
                         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
                             items(list, key = { it.v.time }) { h ->
@@ -1201,14 +1234,14 @@ class EditActivity : ComponentActivity() {
             Dlg.DELETE -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },
                 title = { Text("このメモを削除しますか？") },
-                text = { Text("txtファイルも削除されます。元に戻せません。") },
+                text = { Text("txtファイルも削除。元に戻せない。") },
                 confirmButton = { TextButton(onClick = { dlg = Dlg.NONE; deleteMemo() }) { Text("削除") } },
                 dismissButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("キャンセル") } },
             )
             Dlg.CLEAR -> AlertDialog(
                 onDismissRequest = { dlg = Dlg.NONE },
                 title = { Text("メモの内容をすべて消しますか？") },
-                text = { Text("「↺ 戻す」で元に戻せます（画面を閉じるまで）。") },
+                text = { Text("「↺ 戻す」で復帰可能（画面を閉じるまで）。") },
                 confirmButton = {
                     TextButton(onClick = {
                         dlg = Dlg.NONE
@@ -1239,7 +1272,7 @@ class EditActivity : ComponentActivity() {
                                 com.ghghuser.fusenizetxt.data.Brightness.apply(this@EditActivity)
                             }
                         }
-                        Text("このアプリを開いている間だけ有効です。", style = MaterialTheme.typography.labelSmall)
+                        Text("アプリを開いている間のみ有効。", style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 confirmButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("閉じる") } },
@@ -1249,8 +1282,8 @@ class EditActivity : ComponentActivity() {
                 title = { Text("ファイル名を自動に戻しますか？") },
                 text = {
                     Text(
-                        "今のファイル名「" + fileName.removeSuffix(".txt").removeSuffix(".TXT") + "」は消えて、メモの1行目から付く名前（「" +
-                            MemoRepo.titleFor(text.text) + "」）に置き換わります。以降は、1行目を書き換えるたびにファイル名も変わります。"
+                        "今のファイル名「" + fileName.removeSuffix(".txt").removeSuffix(".TXT") + "」は消え、メモの1行目から付く名前（「" +
+                            MemoRepo.titleFor(text.text) + "」）へ置き換わる。以降は1行目の書き換えごとにファイル名も変更。"
                     )
                 },
                 confirmButton = {
@@ -1293,7 +1326,7 @@ class EditActivity : ComponentActivity() {
                             store.editorBgColor = null
                             store.editorTextColor = null
                         }) { Text("既定に戻す（一覧の色に合わせる）") }
-                        Text("アプリ内のすべてのメモに共通です。ウィジェットの色は、ウィジェットの設定で変えます。", style = MaterialTheme.typography.labelSmall)
+                        Text("アプリ内のすべてのメモに共通。ウィジェットの色は、ウィジェットの設定で変更。", style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 confirmButton = { TextButton(onClick = { dlg = Dlg.NONE }) { Text("閉じる") } },
@@ -1303,7 +1336,7 @@ class EditActivity : ComponentActivity() {
                 title = { Text("リマインダー") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("このメモを指定の日時に通知します。通知を押すとこのメモが開きます。", style = MaterialTheme.typography.bodySmall)
+                        Text("このメモを指定の日時に通知。通知を押すとメモが開く。", style = MaterialTheme.typography.bodySmall)
                         Text(
                             java.text.SimpleDateFormat("yyyy/MM/dd (E) HH:mm", java.util.Locale.getDefault()).format(Date(remAt)),
                             style = MaterialTheme.typography.titleMedium,
@@ -1334,7 +1367,7 @@ class EditActivity : ComponentActivity() {
                 confirmButton = {
                     TextButton(onClick = {
                         if (remAt <= System.currentTimeMillis()) {
-                            Toast.makeText(this@EditActivity, "未来の日時を指定してください", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@EditActivity, "未来の日時を指定", Toast.LENGTH_SHORT).show()
                         } else {
                             dlg = Dlg.NONE
                             setReminder(remAt, remRepeat)
@@ -1353,7 +1386,7 @@ class EditActivity : ComponentActivity() {
                 title = { Text("ファイル名の変更") },
                 text = {
                     Column {
-                        Text("手動で決めると、1行目を書き換えてもファイル名は変わりません。", style = MaterialTheme.typography.bodySmall)
+                        Text("手動で決めた場合、1行目を書き換えてもファイル名は変更なし。", style = MaterialTheme.typography.bodySmall)
                         OutlinedTextField(
                             value = renameText,
                             onValueChange = { renameText = it },

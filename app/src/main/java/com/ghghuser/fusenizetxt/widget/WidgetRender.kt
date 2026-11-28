@@ -22,6 +22,7 @@ import com.ghghuser.fusenizetxt.data.Store
 import com.ghghuser.fusenizetxt.data.WidgetConfig
 import com.ghghuser.fusenizetxt.data.contrastTextRgb
 import com.ghghuser.fusenizetxt.data.rgbToArgb
+import com.ghghuser.fusenizetxt.data.softenedTextRgb
 import com.ghghuser.fusenizetxt.ui.ConfigActivity
 import com.ghghuser.fusenizetxt.ui.EditActivity
 import kotlinx.coroutines.launch
@@ -37,6 +38,14 @@ object WidgetRender {
     const val ACTION_PAGE = "com.ghghuser.fusenizetxt.action.PAGE"
     const val EXTRA_ID = "w_id"
     const val EXTRA_TO = "w_to"
+
+    /** タブに出すタイトル（そのページのメモのファイル名）。未設定のページは「−」 */
+    private fun tabTitle(ctx: Context, cfg: WidgetConfig, i: Int): String {
+        val pg = cfg.pages[i]
+        val uri = pg.fileUri ?: return "−"
+        val nm = runCatching { MemoRepo.displayName(ctx, Uri.parse(uri)) }.getOrNull() ?: return "−"
+        return MemoRepo.shownTitle(nm, pg.manualName || Store(ctx).isManual(uri)).ifBlank { "−" }
+    }
 
     private val TAB_IDS = intArrayOf(R.id.w_tab0, R.id.w_tab1, R.id.w_tab2, R.id.w_tab3, R.id.w_tab4)
     private val TABT_IDS = intArrayOf(R.id.w_tabt0, R.id.w_tabt1, R.id.w_tabt2, R.id.w_tabt3, R.id.w_tabt4)
@@ -67,7 +76,7 @@ object WidgetRender {
 
     /** (表示テキスト, プレースホルダかどうか) */
     internal fun resolveText(ctx: Context, cfg: WidgetConfig, limit: Int = MAX_CHARS): Pair<String, Boolean> {
-        val u = cfg.fileUri ?: return "タップしてメモを選択" to true
+        val u = cfg.fileUri ?: return "タップでメモを選択" to true
         val uri = Uri.parse(u)
         val read = MemoRepo.readText(ctx, uri)
         val text = read.getOrNull()?.text
@@ -76,12 +85,12 @@ object WidgetRender {
                 // 中身が空で、自分で付けたタイトルがある時はタイトルを表示（書かれたら中身を表示）
                 val manual = cfg.manualName || Store(ctx).isManual(u)
                 val title = if (manual) MemoRepo.displayName(ctx, uri)?.removeSuffix(".txt")?.removeSuffix(".TXT") else null
-                if (!title.isNullOrBlank() && !cfg.styleFor(cfg.cur).showTitle) title to false else "（タップして入力）" to true
+                if (!title.isNullOrBlank() && !cfg.styleFor(cfg.cur).showTitle) title to false else "（タップで入力）" to true
             } else text.take(limit) to false
-            !MemoRepo.exists(ctx, uri) -> "ファイルが見つかりません\nタップして再設定" to true
-            read.exceptionOrNull() is MemoRepo.EncodingException -> "文字コードの確認が必要です\nタップして開く" to true
+            !MemoRepo.exists(ctx, uri) -> "ファイルが見つからない\nタップで再設定" to true
+            read.exceptionOrNull() is MemoRepo.EncodingException -> "文字コードの確認が必要\nタップで開く" to true
             cfg.cachedText.isNotEmpty() -> cfg.cachedText.take(limit) to false
-            else -> ("読み込めません\n" + (read.exceptionOrNull()?.message ?: "")) to true
+            else -> ("読み込みに失敗\n" + (read.exceptionOrNull()?.message ?: "")) to true
         }
     }
 
@@ -115,8 +124,8 @@ object WidgetRender {
         val cfg = Store(ctx).getConfig(id)
         val page = cfg.cur
         val s = cfg.styleFor(page)
-        val (text, placeholder) = if (safe) ("表示できませんでした\nタップして開く" to true)
-        else runCatching { resolveText(ctx, cfg) }.getOrElse { "読み込めません\nタップして開く" to true }
+        val (text, placeholder) = if (safe) ("表示に失敗\nタップで開く" to true)
+        else runCatching { resolveText(ctx, cfg) }.getOrElse { "読み込みに失敗\nタップで開く" to true }
         val d = ctx.resources.displayMetrics.density
         fun px(dp: Int) = (dp * d + 0.5f).toInt()
 
@@ -191,7 +200,7 @@ object WidgetRender {
             rv.setViewVisibility(R.id.w_title, View.VISIBLE)
             rv.setTextViewText(R.id.w_title, ts)
             rv.setTextViewTextSize(R.id.w_title, TypedValue.COMPLEX_UNIT_SP, s.titleSizeSp.toFloat())
-            rv.setTextColor(R.id.w_title, rgbToArgb(fgRgb))
+            rv.setTextColor(R.id.w_title, rgbToArgb(softenedTextRgb(fgRgb, s.bgColor))) // 背景に少し寄せた色（読める濃さは確保）
             rv.setInt(R.id.w_title, "setGravity", when (s.hAlign) { 1 -> android.view.Gravity.CENTER_HORIZONTAL; 2 -> android.view.Gravity.END; else -> android.view.Gravity.START })
         } else {
             rv.setViewVisibility(R.id.w_title, View.GONE)
@@ -238,8 +247,14 @@ object WidgetRender {
             val tabStyle = cfg.styleFor(i)
             val padPx = px(((s.tabHeightDp - 15) / 2).coerceAtLeast(0))
             rv.setViewPadding(TABT_IDS[i], 0, padPx, 0, padPx)
-            val label = SpannableString("${i + 1}")
-            if (on) label.setSpan(StyleSpan(Typeface.BOLD), 0, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val label = SpannableString(
+                when (s.tabLabel) {
+                    1 -> tabTitle(ctx, cfg, i)
+                    2 -> ""
+                    else -> "${i + 1}"
+                },
+            )
+            if (on && label.isNotEmpty()) label.setSpan(StyleSpan(Typeface.BOLD), 0, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             rv.setViewVisibility(tab, View.VISIBLE)
             rv.setTextViewText(TABT_IDS[i], label)
             // タブの背景は、対応するページのウィジェット背景（色・透過度）と同じ。選択中は太字で示す

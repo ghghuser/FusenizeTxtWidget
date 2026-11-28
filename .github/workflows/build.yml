@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: write # 古い成果物を削除するため
 
 jobs:
   build:
@@ -101,3 +102,17 @@ jobs:
           name: FusenizeTxtWidget-build${{ github.run_number }}-debug
           path: dist/FusenizeTxtWidget-build${{ github.run_number }}-debug.apk
           if-no-files-found: error
+
+      # 成果物は直近2つだけ残す（失敗してもビルド自体は止めない）
+      - name: Delete old artifacts
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | [.created_at, .id] | @tsv' \
+            | sort -r | tail -n +3 | cut -f2 \
+            | while read -r id; do
+                gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" > /dev/null || true
+              done
