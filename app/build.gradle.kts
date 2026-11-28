@@ -17,7 +17,7 @@ android {
         minSdk = 29 // 保存フォルダ未設定時に Documents/FusenizeTxtWidget へ保存するため（MediaStore）
         targetSdk = 35
         versionCode = buildNumber
-        versionName = "0.2.$buildNumber"
+        versionName = "1.0.${buildNumber / 100}.${buildNumber % 100}" // ビルド番号 #1010 → 1.0.10.10
     }
 
     // CIのランナーは毎回新しいデバッグ署名鍵を作るため、更新インストールが署名不一致で失敗していた。

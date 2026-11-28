@@ -208,7 +208,7 @@ class MainActivity : ComponentActivity() {
                         kotlinx.coroutines.delay(600)
                         creating = false
                         if (s != null) openEditor(s.uri, isNew = true)
-                        else toast("作成できませんでした")
+                        else toast("作成に失敗")
                     }
                 }) { Text("＋", fontSize = 24.sp) }
             },
@@ -272,7 +272,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (sorted.isEmpty()) {
                     Text(
-                        if (tab == 0) "まだ開いたメモがありません。\n「フォルダ内」タブか＋から開けます。" else "txtがありません。＋で作成できます。",
+                        if (tab == 0) "開いたメモなし\n「フォルダ内」タブか＋から開く" else "txtなし\n＋で作成",
                         modifier = Modifier.padding(16.dp), color = onBg,
                     )
                 } else {
@@ -331,7 +331,7 @@ class MainActivity : ComponentActivity() {
                 AlertDialog(
                     onDismissRequest = { confirmDelete = false },
                     title = { Text("${selected.size}件のメモを削除しますか？") },
-                    text = { Text("選んだメモのtxtファイルを削除します。元に戻せません。ウィジェットに設定されているメモは未設定に戻ります。") },
+                    text = { Text("選んだメモのtxtファイルを削除。元に戻せない。ウィジェットに設定中のメモは未設定に戻る。") },
                     confirmButton = {
                         TextButton(onClick = {
                             val targets = selected.toList()
@@ -352,7 +352,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     n
                                 }
-                                toast(if (ok == targets.size) "${ok}件削除しました" else "${ok}件削除しました（${targets.size - ok}件は削除できませんでした）")
+                                toast(if (ok == targets.size) "${ok}件を削除" else "${ok}件を削除（${targets.size - ok}件は削除に失敗）")
                                 FusenApp.refreshWidgets(applicationContext)
                                 tick++
                             }

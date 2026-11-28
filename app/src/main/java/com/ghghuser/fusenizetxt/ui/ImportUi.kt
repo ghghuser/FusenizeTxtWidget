@@ -49,10 +49,10 @@ fun ConflictDialog(c: ImportCoordinator) {
     if (!confirming) {
         AlertDialog(
             onDismissRequest = { a.result.complete(null) },
-            title = { Text("同じ名前のファイルがあります") },
+            title = { Text("同じ名前のファイルあり") },
             text = {
                 Column {
-                    Text("「${a.name}」は保存先にすでにあります。どうしますか？")
+                    Text("「${a.name}」は保存先に既存。対応を選択。")
                     if (a.remaining > 0) {
                         Row(
                             Modifier.fillMaxWidth().clickable { applyAll = !applyAll },
@@ -80,8 +80,8 @@ fun ConflictDialog(c: ImportCoordinator) {
             title = { Text("本当に上書きしますか？") },
             text = {
                 Text(
-                    "「${a.name}」の内容は元に戻せません。" +
-                        if (applyAll) "\n残りの重複ファイルもすべて上書きされます。" else ""
+                    "「${a.name}」の内容は元に戻せない。" +
+                        if (applyAll) "\n残りの重複ファイルもすべて上書き。" else ""
                 )
             },
             confirmButton = {

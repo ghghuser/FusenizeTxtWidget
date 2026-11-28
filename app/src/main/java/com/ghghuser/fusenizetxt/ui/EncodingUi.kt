@@ -40,11 +40,11 @@ fun EncodingDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("UTF-8ではないファイルです") },
+        title = { Text("UTF-8以外のファイル") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    "文字化けしない文字コードを選んでください。選ぶだけではファイルは変更されません。",
+                    "文字化けしない文字コードの選択。選ぶだけではファイルは変更されない。",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 MemoRepo.ENCODINGS.forEach { (id, label) ->
@@ -59,7 +59,7 @@ fun EncodingDialog(
                         Column {
                             Text(label)
                             Text(
-                                preview ?: "（この文字コードでは読めません）",
+                                preview ?: "（この文字コードでは読めない）",
                                 style = MaterialTheme.typography.labelSmall,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
