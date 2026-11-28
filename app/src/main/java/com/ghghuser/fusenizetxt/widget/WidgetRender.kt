@@ -22,6 +22,7 @@ import com.ghghuser.fusenizetxt.data.Store
 import com.ghghuser.fusenizetxt.data.WidgetConfig
 import com.ghghuser.fusenizetxt.data.contrastTextRgb
 import com.ghghuser.fusenizetxt.data.rgbToArgb
+import com.ghghuser.fusenizetxt.data.softenedTextRgb
 import com.ghghuser.fusenizetxt.ui.ConfigActivity
 import com.ghghuser.fusenizetxt.ui.EditActivity
 import kotlinx.coroutines.launch
